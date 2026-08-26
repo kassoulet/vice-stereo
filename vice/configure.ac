@@ -25,7 +25,7 @@ m4_define(vice_version,
                         [vice_version_major.vice_version_minor.vice_version_build])))
 
 dnl The major/minor stuff gets replaced in autogen.sh
-AC_INIT([vice], [vice_version])
+AC_INIT([vice-stereosid], [vice_version])
 dnl We save the command line options here since AM_INIT_AUTOMAKE and other
 dnl macros clobber $@:
 cmdline_options="$@"
@@ -1037,7 +1037,7 @@ darwin*)
     AC_CHECK_FILE(/usr/local/lib,             [ MAC_LDFLAGS="$MAC_LDFLAGS -L/usr/local/lib -Wl,-rpath,/usr/local/lib" ])
     AC_CHECK_FILE(/usr/local/lib/libomp,      [ MAC_LDFLAGS="$MAC_LDFLAGS -L/usr/local/lib/libomp -Wl,-rpath,/usr/local/lib/libomp" ])
   fi
-  
+
   CPPFLAGS="$CPPFLAGS $MAC_CCPFLAGS"
   VICE_CPPFLAGS="$VICE_CPPFLAGS $MAC_CCPFLAGS"
   LDFLAGS="$LDFLAGS $MAC_LDFLAGS"
@@ -1881,7 +1881,7 @@ if test x"$with_resid" = "xno"; then
   dnl macro is used.
   dnl Another workaround must be found if other self-contained packages go
   dnl into VICE.
-  
+
   dnl A workaround for an autoconf bug when not using/checking the C++
   dnl compiler, we'll define am__fastdepCXX_TRUE as #
   am__fastdepCXX_TRUE=#

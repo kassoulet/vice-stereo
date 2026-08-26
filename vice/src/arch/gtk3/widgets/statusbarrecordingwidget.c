@@ -339,7 +339,7 @@ void statusbar_recording_widget_set_time(GtkWidget *widget,
     } else {
         type = RW_TYPE_VIDEO;
     }
-    g_snprintf(buffer, sizeof(buffer), "Recording %s ...", rec_types[type]);
+    g_snprintf(buffer, sizeof(buffer), "Recording %s ....", rec_types[type]);
     gtk_label_set_text(GTK_LABEL(status), buffer);
 }
 

@@ -34,6 +34,7 @@
 #include "debug_gtk3.h"
 #include "info.h"
 #include "lib.h"
+#include "resources.h"
 #ifdef USE_SVN_REVISION
 # include "svnversion.h"
 #endif
@@ -229,6 +230,14 @@ void ui_about_dialog_show(void)
             break;
     }
     g_snprintf(buffer, sizeof(buffer), "The %s Emulator", model);
+    {
+        int sidstereo = 0;
+        if (resources_get_int("SidStereo", &sidstereo) == 0 && sidstereo > 0) {
+            g_snprintf(buffer + strlen(buffer),
+                    (size_t)(sizeof(buffer) - strlen(buffer)),
+                    "\nstereo-sid");
+        }
+    }
     gtk_about_dialog_set_comments(GTK_ABOUT_DIALOG(about), buffer);
 
     /* set license */

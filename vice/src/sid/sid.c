@@ -434,6 +434,7 @@ void sid_store(uint16_t addr, uint8_t byte)
         sid_store_chip(addr, byte, 7);
     }
     sid_store_chip(addr, byte, 0);
+    sid_store_chip(addr, byte, 1);
 }
 
 #define SIDx_STORE(sid_nr)                                \
@@ -1171,6 +1172,33 @@ int sid_machine_get_max_sids(void)
     }
 }
 
+// // Fonction de copie des registres
+// void sid_mirror_registers(void) {
+//     if (!sid_dual.mirror_enable) return;
+
+//     // Copie tous les registres du SID principal vers le second
+//     for (int i = 0; i < 32; i++) {
+//         sid_store(0xd420 + i, sid_peek(0xd400 + i));
+//     }
+// }
+
+// // Modification du gestionnaire d'accès mémoire
+// uint8_t sid_read(uint16_t addr) {
+//     uint8_t value = original_sid_read(addr);
+//     if (sid_dual.mirror_enable && addr >= 0xd400 && addr <= 0xd41f) {
+//         // Mirror l'accès en lecture
+//         sid_second_read(addr + 0x20);
+//     }
+//     return value;
+// }
+
+// void sid_store(uint16_t addr, uint8_t value) {
+//     original_sid_store(addr, value);
+//     if (sid_dual.mirror_enable && addr >= 0xd400 && addr <= 0xd41f) {
+//         // Mirror l'accès en écriture
+//         sid_second_store(addr + 0x20, value);
+//     }
+// }
 
 /** \brief  Determine maximum number of SIDs for current machine and a \engine
  *

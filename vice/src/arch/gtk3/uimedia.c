@@ -358,14 +358,11 @@ static void on_response(GtkDialog *dialog, gint response_id, gpointer data)
                     save_screenshot_handler(data);
                 } else if (strcmp(child_name, CHILD_SOUND) == 0) {
                     save_audio_recording_handler(data);
-                    ui_display_recording(1);
                 } else if (strcmp(child_name, CHILD_VIDEO) == 0) {
                     save_video_recording_handler(data);
-                    ui_display_recording(1);
                 }
             } else {
                 save_audio_recording_handler(data);
-                ui_display_recording(1);
             }
 #if 0
             mainlockk_release();
@@ -620,6 +617,7 @@ static void on_save_audio_filename(GtkDialog *dialog,
         /* XXX: setting resources doesn't exactly help with catching errors */
         resources_set_string("SoundRecordDeviceArg", filename_locale);
         resources_set_string("SoundRecordDeviceName", name);
+        ui_display_recording(1);
         g_free(filename);
         g_free(filename_locale);
     }
@@ -705,6 +703,8 @@ static void on_save_video_filename(GtkDialog *dialog,
                                     "VICE Error",
                                     "Failed to write video file '%s'",
                                     filename);
+        } else {
+            ui_display_recording(1);
         }
         g_free(filename);
         g_free(filename_locale);

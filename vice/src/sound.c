@@ -1056,11 +1056,21 @@ static int sid_init(void)
     snddata.wclk = maincpu_clk;
     snddata.lastclk = maincpu_clk;
 
+    int sid_model_save;
+    resources_get_int("SidModel", &sid_model_save);
+    log_message(LOG_DEFAULT, "DualSidStereo by Kassoulet");
+
     for (c = 0; c < snddata.sound_chip_channels; c++) {
+        if (c&1) {
+            resources_set_int("SidModel", 0);
+        } else {
+            resources_set_int("SidModel", 1);
+        }
         if (!sound_machine_init(snddata.psid[c], speed, cycles_per_sec) || !playback_enabled) {
             return sound_error("Cannot initialize SID engine");
         }
     }
+    resources_set_int("SidModel", sid_model_save);
 
     return 0;
 }
