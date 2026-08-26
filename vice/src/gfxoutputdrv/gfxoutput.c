@@ -47,12 +47,16 @@
 #include "pngdrv.h"
 #endif
 
-#ifdef HAVE_FFMPEG
-#include "ffmpegdrv.h"
-#endif
 #include "ffmpegexedrv.h"
-
 #include "zmbvdrv.h"
+
+/*#define DEBUG_GFXOUTPUT*/
+
+#ifdef DEBUG_GFXOUTPUT
+#define DBG(x)  log_printf x
+#else
+#define DBG(x)
+#endif
 
 struct gfxoutputdrv_list_s {
     struct gfxoutputdrv_s *drv;
@@ -115,9 +119,6 @@ int gfxoutput_early_init(int help)
 
     /* video related */
     gfxoutput_init_zmbv(help);
-#ifdef HAVE_FFMPEG
-    gfxoutput_init_ffmpeg(help);
-#endif
     gfxoutput_init_ffmpegexe(help);
 
     /* C64 formats */
@@ -162,6 +163,7 @@ void gfxoutput_shutdown(void)
 int gfxoutput_register(gfxoutputdrv_t *drv)
 {
     gfxoutputdrv_list_t *current;
+    DBG(("gfxoutput_register: (%s)", drv->name));
 
     current = gfxoutputdrv_list;
 
@@ -186,6 +188,7 @@ gfxoutputdrv_t *gfxoutput_get_driver(const char *drvname)
     gfxoutputdrv_list_t *current = gfxoutputdrv_list;
 
     while (current->next != NULL) {
+        DBG(("gfxoutput_get_driver: (%s) %s", drvname, current->drv->name));
         if (strcmp(drvname, current->drv->name) == 0
             || strcmp(drvname, current->drv->displayname) == 0) {
             break;

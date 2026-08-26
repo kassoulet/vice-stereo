@@ -35,6 +35,7 @@
 #include "catweaselmkiii.h"
 #include "fastsid.h"
 #include "hardsid.h"
+#include "usbsid.h"
 #include "log.h"
 #include "parsid.h"
 #include "resources.h"
@@ -61,7 +62,7 @@ static int intended_sid_engine = -1;
 
 /* ---------------------------------------------------------------------*/
 
-/* SID snapshot module format:
+/* SID 1.5 snapshot module format:
 
    type  | name     | version | description
    ----------------------------------------
@@ -72,7 +73,7 @@ static int intended_sid_engine = -1;
    ARRAY | sid data |   1.1+  | 32 BYTES of SID registers
  */
 
-/* SID2 snapshot module format:
+/* SID2 1.5 snapshot module format:
 
    type  | name     | version | description
    ----------------------------------------
@@ -80,7 +81,7 @@ static int intended_sid_engine = -1;
    ARRAY | sid data |   1.2+  | 32 BYTES of SID registers
  */
 
-/* SID3 snapshot module format:
+/* SID3 1.5 snapshot module format:
 
    type  | name     | version | description
    ----------------------------------------
@@ -88,7 +89,7 @@ static int intended_sid_engine = -1;
    ARRAY | sid data |   1.2+  | 32 BYTES of SID registers
  */
 
-/* SID4 snapshot module format:
+/* SID4 1.5 snapshot module format:
 
    type  | name     | version | description
    ----------------------------------------
@@ -96,7 +97,7 @@ static int intended_sid_engine = -1;
    ARRAY | sid data |   1.4+  | 32 BYTES of SID registers
  */
 
-/* SID5 snapshot module format:
+/* SID5 1.5 snapshot module format:
 
    type  | name     | version | description
    ----------------------------------------
@@ -104,7 +105,7 @@ static int intended_sid_engine = -1;
    ARRAY | sid data |   1.5+  | 32 BYTES of SID registers
  */
 
-/* SID6 snapshot module format:
+/* SID6 1.5 snapshot module format:
 
    type  | name     | version | description
    ----------------------------------------
@@ -112,7 +113,7 @@ static int intended_sid_engine = -1;
    ARRAY | sid data |   1.5+  | 32 BYTES of SID registers
  */
 
-/* SID7 snapshot module format:
+/* SID7 1.5 snapshot module format:
 
    type  | name     | version | description
    ----------------------------------------
@@ -120,7 +121,7 @@ static int intended_sid_engine = -1;
    ARRAY | sid data |   1.5+  | 32 BYTES of SID registers
  */
 
-/* SID8 snapshot module format:
+/* SID8 1.5 snapshot module format:
 
    type  | name     | version | description
    ----------------------------------------
@@ -396,7 +397,7 @@ fail:
 
 /* ---------------------------------------------------------------------*/
 
-/* SIDEXTENDED (for fastsid engine) snapshot module format:
+/* SIDFASTSID 1.4 (for fastsid engine) snapshot module format:
 
    type   | name            | description
    --------------------------------------
@@ -625,7 +626,7 @@ static int sid_snapshot_read_fastsid_module(snapshot_module_t *m, int sidnr)
 
 /* ---------------------------------------------------------------------*/
 
-/* SIDEXTENDED (for resid engine) snapshot module format:
+/* SIDRESID 1.4 (for resid engine) snapshot module format:
 
    type  | name                       | description
    ------------------------------------------------
@@ -736,7 +737,7 @@ static int sid_snapshot_read_resid_module(snapshot_module_t *m, int sidnr)
 
 /* ---------------------------------------------------------------------*/
 
-/* SIDEXTENDED (for catweasel engine) snapshot module format:
+/* SIDCWMKIII 1.4 (for catweasel engine) snapshot module format:
 
    type  | name              | description
    ---------------------------------------
@@ -780,7 +781,7 @@ static int sid_snapshot_read_cw3_module(snapshot_module_t *m, int sidnr)
 
 /* ---------------------------------------------------------------------*/
 
-/* SIDEXTENDED (for hardsid engine) snapshot module format:
+/* SIDHARDSID 1.4 (for hardsid engine) snapshot module format:
 
    type  | name               | version | description
    --------------------------------------------------
@@ -852,7 +853,7 @@ static int sid_snapshot_read_hs_module(snapshot_module_t *m, int sidnr, uint8_t 
 
 /* ---------------------------------------------------------------------*/
 
-/* SIDEXTENDED (for parsid engine) snapshot module format:
+/* SIDPARSID 1.4 snapshot module format:
 
    type  | name      | description
    -------------------------------
@@ -893,42 +894,118 @@ static int sid_snapshot_read_parsid_module(snapshot_module_t *m, int sidnr)
 #endif
 #endif
 
+/* SIDUSBSID 1.4 snapshot module format:
+
+   type  | name                 | description
+   -------------------------------------------
+   ARRAY | registers            | (0x20 * 4) BYTES of register data
+   QWORD | main clk             |
+   QWORD | alarm clk            |
+   BYTE  | lastaccess_chipno    |
+ */
+
+#ifdef HAVE_USBSID
+static int sid_snapshot_write_us_module(snapshot_module_t *m, int sidnr)
+{
+    sid_us_snapshot_state_t sid_state;
+
+    usbsid_state_read(sidnr, &sid_state);
+
+    if (0
+        || SMW_BA(m, sid_state.regs, (0x20 * 4)) < 0
+        || SMW_QW(m, sid_state.usid_main_clk) < 0
+        || SMW_QW(m, sid_state.usid_alarm_clk) < 0
+        || SMW_B(m, sid_state.lastaccess_chipno) < 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static int sid_snapshot_read_us_module(snapshot_module_t *m, int sidnr)
+{
+    sid_us_snapshot_state_t sid_state;
+
+    if (0
+        || SMW_BA(m, sid_state.regs, (0x20 * 4)) < 0
+        || SMW_QW(m, sid_state.usid_main_clk) < 0
+        || SMW_QW(m, sid_state.usid_alarm_clk) < 0
+        || SMW_B(m, sid_state.lastaccess_chipno) < 0) {
+        return -1;
+    }
+
+    usbsid_state_write(sidnr, &sid_state);
+
+    return 0;
+}
+#endif
+
+
 /* ---------------------------------------------------------------------*/
 
-static const char snap_module_name_extended1[] = "SIDEXTENDED";
-static const char snap_module_name_extended2[] = "SIDEXTENDED2";
-static const char snap_module_name_extended3[] = "SIDEXTENDED3";
-static const char snap_module_name_extended4[] = "SIDEXTENDED4";
 #define SNAP_MAJOR_EXTENDED 1
 #define SNAP_MINOR_EXTENDED 4
+
+static char snap_module_name_extended[0x20];
+
+static char *sid_snapshot_module_name(int sidnr, int sid_engine)
+{
+    char *engine = "EXTENDED";
+    switch (sid_engine) {
+#ifdef HAVE_RESID
+        case SID_ENGINE_RESID:
+            engine = "RESID";
+            break;
+#endif
+#ifdef HAVE_CATWEASELMKIII
+        case SID_ENGINE_CATWEASELMKIII:
+            engine = "CWMKIII";
+            break;
+#endif
+#ifdef HAVE_HARDSID
+        case SID_ENGINE_HARDSID:
+            engine = "HARDSID";
+            break;
+#endif
+#ifdef HAVE_PARSID
+#if !defined(WINDOWS_COMPILE) || (defined(WINDOWS_COMPILE) && defined(HAVE_LIBIEEE1284))
+        case SID_ENGINE_PARSID:
+            engine = "PARSID";
+            break;
+#endif
+#endif
+#ifdef HAVE_FASTSID
+        case SID_ENGINE_FASTSID:
+            engine = "FASTSID";
+            break;
+#endif
+#ifdef HAVE_USBSID
+        case SID_ENGINE_USBSID:
+            engine = "USBSID";
+            break;
+#endif
+    }
+    if (sidnr) {
+        sprintf(snap_module_name_extended, "SID%s%d", engine, sidnr);
+    } else {
+        sprintf(snap_module_name_extended, "SID%s", engine);
+    }
+    /*printf("sid_snapshot_module_name %d '%s' -> '%s'\n", sidnr, engine, snap_module_name_extended);*/
+    return snap_module_name_extended;
+}
 
 static int sid_snapshot_write_module_extended(snapshot_t *s, int sidnr)
 {
     snapshot_module_t *m;
     int sound;
     int sid_engine = 0;
-    const char *snap_module_name_extended = NULL;
-
-    switch (sidnr) {
-        default:
-        case 0:
-            snap_module_name_extended = snap_module_name_extended1;
-            break;
-        case 1:
-            snap_module_name_extended = snap_module_name_extended2;
-            break;
-        case 2:
-            snap_module_name_extended = snap_module_name_extended3;
-            break;
-        case 3:
-            snap_module_name_extended = snap_module_name_extended4;
-            break;
-    }
+    char *snap_name;
 
     resources_get_int("Sound", &sound);
     resources_get_int("SidEngine", &sid_engine);
 
-    m = snapshot_module_create(s, snap_module_name_extended, SNAP_MAJOR_EXTENDED, SNAP_MINOR_EXTENDED);
+    snap_name = sid_snapshot_module_name(sidnr, sid_engine);
+
+    m = snapshot_module_create(s, snap_name, SNAP_MAJOR_EXTENDED, SNAP_MINOR_EXTENDED);
 
     if (m == NULL) {
         return -1;
@@ -972,8 +1049,14 @@ static int sid_snapshot_write_module_extended(snapshot_t *s, int sidnr)
             }
             break;
 #endif
+#ifdef HAVE_USBSID
+        case SID_ENGINE_USBSID:
+            if (sid_snapshot_write_us_module(m, sidnr) < 0) {
+                goto fail;
+            }
+            break;
+#endif
     }
-
     return snapshot_module_close(m);
 
 fail:
@@ -986,29 +1069,15 @@ static int sid_snapshot_read_module_extended(snapshot_t *s, int sidnr)
     uint8_t major_version, minor_version;
     snapshot_module_t *m;
     int sid_engine;
-    const char *snap_module_name_extended = NULL;
+    char *snap_name;
     int i;
     uint8_t *siddata;
 
     resources_get_int("SidEngine", &sid_engine);
 
-    switch (sidnr) {
-        default:
-        case 0:
-            snap_module_name_extended = snap_module_name_extended1;
-            break;
-        case 1:
-            snap_module_name_extended = snap_module_name_extended2;
-            break;
-        case 2:
-            snap_module_name_extended = snap_module_name_extended3;
-            break;
-        case 3:
-            snap_module_name_extended = snap_module_name_extended4;
-            break;
-    }
+    snap_name = sid_snapshot_module_name(sidnr, sid_engine);
 
-    /* If the sid engine data that was save does not match the current engine
+    /* If the sid engine data that was saved does not match the current engine
        then don't try to load the data */
     if (intended_sid_engine != sid_engine) {
         siddata = sid_get_siddata(sidnr);
@@ -1034,7 +1103,7 @@ static int sid_snapshot_read_module_extended(snapshot_t *s, int sidnr)
         return 0;
     }
 
-    m = snapshot_module_open(s, snap_module_name_extended, &major_version, &minor_version);
+    m = snapshot_module_open(s, snap_name, &major_version, &minor_version);
 
     if (m == NULL) {
         return -1;
@@ -1083,6 +1152,13 @@ static int sid_snapshot_read_module_extended(snapshot_t *s, int sidnr)
             break;
 #endif
 #endif
+#ifdef HAVE_USBSID
+        case SID_ENGINE_USBSID:
+            if (sid_snapshot_read_us_module(m, sidnr) < 0) {
+                goto fail;
+            }
+            break;
+#endif
 #ifdef HAVE_FASTSID
         case SID_ENGINE_FASTSID:
             if (sid_snapshot_read_fastsid_module(m, sidnr) < 0) {
@@ -1114,10 +1190,11 @@ int sid_snapshot_write_module(snapshot_t *s)
         }
     }
 
+    /* number of active SIDs */
     resources_get_int("SidStereo", &sids);
-
     ++sids;
 
+    /* for each SID, write 'simple' and 'extended' snapshot module */
     for (i = 0; i < sids; ++i) {
         if (sid_snapshot_write_module_simple(s, i) < 0) {
            return -1;
@@ -1136,6 +1213,7 @@ int sid_snapshot_read_module(snapshot_t *s)
     int sids = 0;
     int i;
 
+    /* always read 'simple' and 'extended' snapshot module for the first SID */
     if (sid_snapshot_read_module_simple(s, 0) < 0) {
         return -1;
     }
@@ -1144,6 +1222,7 @@ int sid_snapshot_read_module(snapshot_t *s)
         return -1;
     }
 
+    /* number of active SIDs */
     resources_get_int("SidStereo", &sids);
     ++sids;
 

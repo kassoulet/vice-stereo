@@ -59,6 +59,7 @@
 #include "main.h"
 #include "mainlock.h"
 #include "resources.h"
+#include "screenshot.h"
 #include "sysfile.h"
 #include "types.h"
 #include "uiapi.h"
@@ -144,53 +145,59 @@ static void vice_banner(void)
     log_message(LOG_DEFAULT, LOG_COL_LWHITE "*** VICE Version %s ***" LOG_COL_OFF, VERSION);
 #endif
     log_message(LOG_DEFAULT, " ");
-    if (machine_class == VICE_MACHINE_VSID) {
-        log_message(LOG_DEFAULT, "Welcome to %s, the free portable SID Player.",
-                    program_name);
+
+    if (log_get_limit() <= LOG_LIMIT_STANDARD) {
+        log_message(LOG_DEFAULT, "This is the condensed log, for the full log use " LOG_COL_LWHITE "--verbose" LOG_COL_OFF " or " LOG_COL_LWHITE "--debug" LOG_COL_OFF ".");
+        log_message(LOG_DEFAULT, " ");
     } else {
-        log_message(LOG_DEFAULT, "Welcome to %s, the free portable %s Emulator.",
-                    program_name, machine_name);
-    }
-    log_message(LOG_DEFAULT, " ");
-
-    log_message(LOG_DEFAULT, "Current VICE team members:");
-    n = 0; *term_tmp = 0;
-    for (i = 0; core_team[i].name != NULL; i++) {
-        name_len = strlen(core_team[i].name);
-        /* XXX: reject names that will never fit, for now */
-        if ((int)name_len + 3 > TERM_TMP_SIZE) {
-            log_warning(LOG_DEFAULT, "%s:%d: name '%s' too large for buffer",
-                    __FILE__, __LINE__, core_team[i].name);
-            break;  /* this will still write out whatever was in the buffer */
-        }
-
-        if (n + (int)name_len + 3 > TERM_TMP_SIZE) {    /* +3 for ", \0" */
-            log_message(LOG_DEFAULT, "%s", term_tmp);
-            strcpy(term_tmp, core_team[i].name);
-            n = (int)name_len;
+        if (machine_class == VICE_MACHINE_VSID) {
+            log_message(LOG_DEFAULT, "Welcome to %s, the free portable SID Player.",
+                        program_name);
         } else {
-            strcat(term_tmp, core_team[i].name);
-            n += (int)name_len;
+            log_message(LOG_DEFAULT, "Welcome to %s, the free portable %s Emulator.",
+                        program_name, machine_name);
         }
-        if (core_team[i + 1].name == NULL) {
-            strcat(term_tmp, ".");
-        } else {
-            strcat(term_tmp, ", ");
-            n += 2;
-        }
-    }
-    log_message(LOG_DEFAULT, "%s", term_tmp);
+        log_message(LOG_DEFAULT, " ");
 
-    log_message(LOG_DEFAULT, " ");
-    log_message(LOG_DEFAULT, LOG_COL_LWHITE "This is free software with ABSOLUTELY NO WARRANTY." LOG_COL_OFF);
-    log_message(LOG_DEFAULT, LOG_COL_LWHITE "See the \"About VICE\" command for more info." LOG_COL_OFF);
-    log_message(LOG_DEFAULT, " ");
+        log_message(LOG_DEFAULT, "Current VICE team members:");
+        n = 0; *term_tmp = 0;
+        for (i = 0; core_team[i].name != NULL; i++) {
+            name_len = strlen(core_team[i].name);
+            /* XXX: reject names that will never fit, for now */
+            if ((int)name_len + 3 > TERM_TMP_SIZE) {
+                log_warning(LOG_DEFAULT, "%s:%d: name '%s' too large for buffer",
+                        __FILE__, __LINE__, core_team[i].name);
+                break;  /* this will still write out whatever was in the buffer */
+            }
+
+            if (n + (int)name_len + 3 > TERM_TMP_SIZE) {    /* +3 for ", \0" */
+                log_message(LOG_DEFAULT, "%s", term_tmp);
+                strcpy(term_tmp, core_team[i].name);
+                n = (int)name_len;
+            } else {
+                strcat(term_tmp, core_team[i].name);
+                n += (int)name_len;
+            }
+            if (core_team[i + 1].name == NULL) {
+                strcat(term_tmp, ".");
+            } else {
+                strcat(term_tmp, ", ");
+                n += 2;
+            }
+        }
+        log_message(LOG_DEFAULT, "%s", term_tmp);
+
+        log_message(LOG_DEFAULT, " ");
+        log_message(LOG_DEFAULT, LOG_COL_LWHITE "This is free software with ABSOLUTELY NO WARRANTY." LOG_COL_OFF);
+        log_message(LOG_DEFAULT, LOG_COL_LWHITE "See the \"About VICE\" command for more info." LOG_COL_OFF);
+        log_message(LOG_DEFAULT, " ");
+    }
 }
 
 /* This is the main program entry point.  Call this from `main()'.  */
 int main_program(int argc, char **argv)
 {
-    int i, n;
+    int i, n, found, foundend;
     int reserr;
     char *cmdline;
 #ifdef WINDOWS_COMPILE
@@ -216,14 +223,26 @@ int main_program(int argc, char **argv)
 
     lib_init();
 
-    /* create string from the commandline that we can log later */
+    /* create string from the (original) command line, that we can log later. */
     cmdline = lib_strdup(argv[0]);
     for (i = 1; i < argc; i++) {
         char *p;
-        p = cmdline; /* remember old pointer */
-        cmdline = util_concat(p, " ", argv[i], NULL);
-        lib_free(p); /* free old pointer */
+        if (argv[i][0] != 0) {
+            p = cmdline; /* remember old pointer */
+            cmdline = util_concat(p, " ", argv[i], NULL);
+            DBG(("argv[%d]='%s'", i, argv[i]));
+            lib_free(p); /* free old pointer */
+        } else {
+            if (i == (argc - 1)) {
+                log_warning(LOG_DEFAULT, "last command line argument is empty (skipped).");
+                argc--;
+            } else {
+                log_error(LOG_DEFAULT, "command line argument %d is empty.", i);
+                exit(EXIT_FAILURE);
+            }
+        }
     }
+    DBG(("original command line: %s", cmdline));
 
 #ifdef WINDOWS_COMPILE
     /* make stdin, stdout and stderr available on Windows when compiling with
@@ -242,8 +261,19 @@ int main_program(int argc, char **argv)
         /* printf("%s(): disabling stream redirection\n", __func__); */
     }
 #endif
-    /* Check for some options at the beginning of the commandline before
-       initializing the user interface or loading the config file.
+
+#if defined(DEBUG_MAIN) || defined(DEBUG)
+    log_set_limit_early(LOG_LIMIT_DEBUG);
+    log_warning(LOG_DEFAULT, "LOG_LIMIT raised to DEBUG");
+#else
+    /* set log level to "normal" here, any log output before would use "debug",
+       and anything after here can use the option(s) on the cmdline */
+    log_set_limit_early(LOG_LIMIT_STANDARD);
+#endif
+
+    /* Check for some options at the beginning of the command line, before
+       initializing the user interface, or loading the config file.
+
        -default => use default config, do not load any config
        -config  => use specified configuration file
        -console => no user interface
@@ -251,25 +281,82 @@ int main_program(int argc, char **argv)
        -silent => no logging
        -seed => set the random seed
     */
+
+    /* First scan for the options that effectively result in some part(s)
+       of the command line being skipped. We must consider two cases:
+
+       1) options which result in the entire config being loaded/initialized,
+          which overrides any previous options (which are thus pointless).
+          (-h, -?, -help, --help, -version, --version)
+       2) options that print some info and quit immediately after that, which
+          makes any further options have no effect. (-default, -config)
+    */
+    DBG(("main:early scan cmdline(argc:%d)", argc));
+    found = 0;
+    foundend = 0;
+    for (i = 1; i < argc; i++) {
+        /* first case, command line stops here */
+        if ((!strcmp(argv[i], "-version")) || (!strcmp(argv[i], "--version")) ||
+            (!strcmp(argv[i], "-help")) || (!strcmp(argv[i], "--help")) ||
+            (!strcmp(argv[i], "-h")) || (!strcmp(argv[i], "-?"))) {
+            foundend = i;
+            break;
+        /* second case, skip previous options */
+        } else if ((!strcmp(argv[i], "-config")) || (!strcmp(argv[i], "--config"))) {
+            found = i;
+        } else if ((!strcmp(argv[i], "-default")) || (!strcmp(argv[i], "--default"))) {
+            found = i;
+        }
+    }
+    DBG(("main: found:%d foundend:%d", found, foundend));
+
+    /* if we found an option that (re)loads the entire config, and it is not
+       the first option on the command line, emit a warning and actually
+       remove the preceding options from the command line, so they don't
+       produce weird side effects further down.
+     */
+    if (found > 1) {
+        DBG(("main:remove preceding cmdline(argc:%d)", argc));
+        log_warning(LOG_DEFAULT, "%d command line argument(s) before '%s' will be discarded.", found - 1, argv[found]);
+        for (i = found, n = 1; i < argc; n++, i++) {
+            DBG(("arg: %d %s", n, argv[i]));
+            argv[n] = argv[i];
+        }
+        argv[n] = NULL;
+        argc = n;
+        if (foundend) {
+            foundend -= (found - 1);
+        }
+    }
+
+    /* if we found options after an option that will print info and quit,
+       terminate the command line after that option. */
+    if (foundend > 1) {
+        int left = (argc - foundend) - 1;
+        if (left > 0) {
+            DBG(("main:remove after cmdline(argc:%d)", argc));
+            log_warning(LOG_DEFAULT, "%d command line argument(s) after '%s' will have no effect.", left, argv[foundend]);
+            argv[foundend + 1] = NULL;
+            argc -= left;
+        }
+    }
+
+    /* now we have prepared the command line and can parse it left to right,
+       we handle all "special" (see above) options here, one that is not
+       handled occurs on the command line.
+    */
     DBG(("main:early parse cmdline(argc:%d)", argc));
     for (i = 1; i < argc; i++) {
-        if ((!strcmp(argv[i], "-console")) || (!strcmp(argv[i], "--console"))) {
-            console_mode = true;
-            /* video_disabled_mode = 1;  Breaks exitscreenshot */
-        } else if ((!strcmp(argv[i], "-version")) || (!strcmp(argv[i], "--version"))) {
-#ifdef USE_SVN_REVISION
-            log_message(LOG_DEFAULT, "%s (VICE %s SVN r%d)\n", archdep_program_name(), VERSION, VICE_SVN_REV_NUMBER);
-#else
-            log_message(LOG_DEFAULT, "%s (VICE %s)\n", archdep_program_name(), VERSION);
-#endif
-            archdep_program_name_free();
-            archdep_program_path_free();
-            lib_free(cmdline);
-            exit(EXIT_SUCCESS);
-        } else if ((!strcmp(argv[i], "-config")) || (!strcmp(argv[i], "--config"))) {
+        DBG(("arg:%d '%s'", i, argv[i]));
+        if ((!strcmp(argv[i], "-config")) || (!strcmp(argv[i], "--config"))) {
             if ((i + 1) < argc) {
                 vice_config_file = lib_strdup(argv[++i]);
+                DBG(("vice_config_file:%s", vice_config_file));
                 loadconfig = true;
+            } else {
+                loadconfig = false;
+                log_error(LOG_DEFAULT, "file name expected");
+                exit(EXIT_FAILURE);
             }
         } else if ((!strcmp(argv[i], "-default")) || (!strcmp(argv[i], "--default"))) {
             loadconfig = false;
@@ -286,29 +373,44 @@ int main_program(int argc, char **argv)
         } else if ((!strcmp(argv[i], "-seed")) || (!strcmp(argv[i], "--seed"))) {
             if ((i + 1) < argc) {
                 lib_rand_seed(strtoul(argv[++i], NULL, 0));
+            } else {
+                log_error(LOG_DEFAULT, "seed expected");
+                exit(EXIT_FAILURE);
             }
+        } else if ((!strcmp(argv[i], "-console")) || (!strcmp(argv[i], "--console"))) {
+            console_mode = true;
+            /* video_disabled_mode = 1;  breaks exitscreenshot */
+        } else if ((!strcmp(argv[i], "-help")) || (!strcmp(argv[i], "--help")) ||
+                   (!strcmp(argv[i], "-h")) || (!strcmp(argv[i], "-?"))) {
+            help_requested = true;
+            break; /* prevent from being removed, we want "help" to trigger */
+        } else if ((!strcmp(argv[i], "-version")) || (!strcmp(argv[i], "--version"))) {
+            help_requested = true;
+            break; /* prevent from being removed, we want "version" to trigger */
         } else {
             break;
         }
     }
-    /* remove the already handled items from the commandline, else they will
-       get parsed again later, which causes surprising effects. */
+
+    /* remove the already handled items from the command line, else they will
+       get parsed again later, which causes surprising effects.
+    */
     for (n = 1; i < argc; n++, i++) {
         argv[n] = argv[i];
     }
     argv[n] = NULL;
     argc = n;
 
-    /* help is also special, but we want it NOT to be ignored by the main
-       commandline handler */
+    /* we are finally done with all the pre-parsing magic that should
+       not exist in the first place. now go on with the more sane
+       things.
+    */
+#ifdef DEBUG_MAIN
+    DBG(("main:final cmdline(argc:%d)", argc));
     for (i = 1; i < argc; i++) {
-        if ((!strcmp(argv[i], "-help")) ||
-                   (!strcmp(argv[i], "--help")) ||
-                   (!strcmp(argv[i], "-h")) ||
-                   (!strcmp(argv[i], "-?"))) {
-            help_requested = true;
-        }
+        DBG(("arg:%d '%s'", i, argv[i]));
     }
+#endif
 
     DBG(("main:archdep_init(argc:%d)", argc));
     if (archdep_init(&argc, argv) != 0) {
@@ -333,11 +435,17 @@ int main_program(int argc, char **argv)
         return -1;
     }
 
+    /* KLUDGES: this should really get fixed properly, so it can go into the
+       regular init function(s) */
     DBG(("main:early gfxoutput init"));
     gfxoutput_early_init((int)help_requested);
     gfxoutput_resources_init();
     if (gfxoutput_cmdline_options_init() < 0) {
         init_cmdline_options_fail("gfxoutput");
+        return -1;
+    }
+    if (screenshot_cmdline_options_init() < 0) {
+        init_cmdline_options_fail("screenshot");
         return -1;
     }
     DBG(("main:early gfxoutput init done"));
@@ -397,6 +505,7 @@ int main_program(int argc, char **argv)
         }
     }
 
+    /***********************************************************************/
     main_log = log_open("Main");
 
     DBG(("main:initcmdline_check_args(argc:%d)", argc));
@@ -444,9 +553,23 @@ int main_program(int argc, char **argv)
 
 #ifdef USE_VICE_THREAD
 
-    if (pthread_create(&vice_thread, NULL, vice_thread_main, NULL)) {
-        log_fatal(main_log, "failed to launch main thread");
-        return 1;
+    {
+        /*
+         * On macOS, pthreads have a default stack size of 512KB. Linux
+         * pthreads use 8MB by default. Since we have code in wic64 that
+         * uses ~1MB temp stack buffers, we explicitly set the VICE thread
+         * stack size to 8MB to bring all platforms in line with Linux.
+         */
+
+        pthread_attr_t attr;
+        size_t stacksize = 8 * 1024 * 1024;
+        pthread_attr_init(&attr);
+        pthread_attr_setstacksize(&attr, stacksize);
+
+        if (pthread_create(&vice_thread, &attr, vice_thread_main, NULL)) {
+            log_fatal(main_log, "failed to launch main thread");
+            return 1;
+        }
     }
 
     pthread_mutex_unlock(&init_lock);
@@ -487,6 +610,11 @@ void vice_thread_shutdown(void)
     log_message(LOG_DEFAULT, "\n" LOG_COL_LWHITE "Configure Flags" LOG_COL_OFF ":\n%s", CONFIGURE_FLAGS);
     /* log resources with non default values */
     resources_log_active();
+
+    if (vice_config_file) {
+        log_message(LOG_DEFAULT, "\n" LOG_COL_LWHITE "Using config file" LOG_COL_OFF ":\n%s", vice_config_file);
+    }
+
     /* log the active config as commandline options */
     cmdline_log_active();
 
@@ -500,7 +628,7 @@ void vice_thread_shutdown(void)
 
     pthread_join(vice_thread, NULL);
 
-    log_message(main_log, "VICE thread has been joined.");
+    log_verbose(main_log, "VICE thread has been joined.");
 }
 
 void *vice_thread_main(void *unused)

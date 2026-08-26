@@ -67,11 +67,21 @@ enum {
 #define OLD_SID 0
 #define NEW_SID 1
 
+#define OLD_SID_CAPS 1
+#define NEW_SID_CAPS 0
+
 #define GLUE_DISCRETE  0
 #define GLUE_CUSTOM_IC 1
 
-#define BOARD_C64 0
-#define BOARD_MAX 1
+/* CAUTION: these are shared with x128 */
+#define BOARD_C64   0
+#define BOARD_MAX   1
+#define BOARD_SX64  2
+#define BOARD_LAST_C64  2
+/* put all C128 boards last */
+#define BOARD_C128  3
+#define BOARD_C128D 4
+#define BOARD_LAST  4
 
 #define IEC_HARD_RESET 0
 #define IEC_SOFT_RESET 1
@@ -97,11 +107,12 @@ enum {
 typedef struct {
     int vicii_model;
     int sid_model;
+    int sid_old_caps; /* residfp only */
     int glue_logic; /* x64sc only */
     int cia1_model;
     int cia2_model;
     int cia_tick;
-    int board; /* 0: normal, 1: ultimax */
+    int board; /* 0: normal, 1: ultimax, 2: sx64, 3: C128 */
     int iecreset; /* 1: reset goes to IEC bus (old) 0: only reset IEC on hard reset (new) */
     const char *kernal;
     const char *chargen;

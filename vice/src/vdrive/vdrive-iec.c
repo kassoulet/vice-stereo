@@ -134,7 +134,7 @@ static int iec_open_read_sequential(vdrive_t *vdrive, unsigned int secondary, un
     status = vdrive_read_sector(vdrive, p->buffer, track, sector);
     p->length = p->buffer[0] ? 0 : p->buffer[1];
 
-    vdrive_set_last_read(track, sector, p->buffer);
+    vdrive_set_last_read(vdrive, track, sector, p->buffer);
 
     if (status != 0) {
         vdrive_iec_close(vdrive, secondary);
@@ -334,6 +334,12 @@ static int iec_open_write(vdrive_t *vdrive, unsigned int secondary,
     } else {
         /* new file... */
 
+        /* fix for bug #2223 */
+        /* a proper fix is to modify cbmdos_command_parse* in cbmdos.c but something may
+           depend on the filetype being set to 0 */
+        if (!cmd_parse->filetype) {
+            cmd_parse->filetype = CBMDOS_FT_SEQ;
+        }
         /* create a slot based on the opening name */
         vdrive_dir_create_slot(p, cmd_parse->file, cmd_parse->filelength,
                                cmd_parse->filetype);
@@ -498,12 +504,16 @@ int vdrive_iec_open(vdrive_t *vdrive, const uint8_t *name, unsigned int length,
 
         if (rc != CBMDOS_IPE_OK) {
             status = SERIAL_ERROR;
+#ifdef DEBUG_DRIVE
+            log_debug(LOG_DEFAULT, "File name parsing failed, rc = %d, status = SERIAL_ERROR", rc);
+#endif
             goto out;
         }
 #ifdef DEBUG_DRIVE
         log_debug(LOG_DEFAULT, "Raw file name: `%s', length: %u.", name, length);
         log_debug(LOG_DEFAULT, "Parsed file name: `%s', reallength: %u. drive: %i",
                   cmd_parse->file, cmd_parse->filelength, cmd_parse->drive);
+        log_debug(LOG_DEFAULT, "File type: %u, Record length: %u.", cmd_parse->filetype, cmd_parse->recordlength);
 #endif
     } else {
         cmd_parse->full = (uint8_t*)cmd_parse_ext->parsecmd;
@@ -950,7 +960,7 @@ static int iec_read_sequential(vdrive_t *vdrive, uint8_t *data,
 
             status = vdrive_read_sector(vdrive, p->buffer, track, sector);
             p->length = p->buffer[0] ? 0 : p->buffer[1];
-            vdrive_set_last_read(track, sector, p->buffer);
+            vdrive_set_last_read(vdrive, track, sector, p->buffer);
 
             if (status == 0) {
                 p->bufptr = 2;

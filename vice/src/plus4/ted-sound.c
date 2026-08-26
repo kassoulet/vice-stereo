@@ -47,6 +47,10 @@
 /* #define DEBUG_TEDSOUND */
 
 #ifdef DEBUG_TEDSOUND
+#pragma GCC diagnostic warning "-O3"
+#pragma GCC diagnostic warning "-Wall"
+#pragma GCC diagnostic warning "-Wextra"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #define DBG(x)     log_printf x
 #else
 #define DBG(x)
@@ -155,6 +159,18 @@ int machine_sid8_check_range(unsigned int sid_adr)
     return 0;
 }
 
+/* dummy function for now */
+int machine_sid9_check_range(unsigned int sid_adr)
+{
+    return 0;
+}
+
+/* dummy function for now */
+int machine_sid10_check_range(unsigned int sid_adr)
+{
+    return 0;
+}
+
 void machine_sid2_enable(int val)
 {
 }
@@ -178,7 +194,7 @@ struct plus4_sound_s {
 
     uint8_t voice0_cached_output;
     uint8_t voice1_cached_output;
-    uint8_t digital_cached_output;
+    uint16_t digital_cached_output;
 
     uint32_t oscStep;
 

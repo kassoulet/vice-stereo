@@ -266,7 +266,17 @@ static unsigned int vsp_buginitialized = 0;
 /* FIXME: reset on "powercycle */
 void vicii_init_vsp_bug(void)
 {
+    static int enabled_last = -1;
     unsigned int val, i;
+
+    if (enabled_last != vicii_resources.vsp_bug_enabled) {
+        enabled_last = vicii_resources.vsp_bug_enabled;
+        if (enabled_last) {
+            log_warning(vicii.log, "VSP Bug: Emulation of memory corruption is enabled.");
+        } else {
+            log_message(vicii.log, "VSP Bug: Emulation of memory corruption is disabled.");
+        }
+    }
 
     vsp_ysmoothold = vicii.ysmooth;
     vsp_bugwarn = 100;  /* max 100 lines of warnings before we give up */
@@ -279,7 +289,7 @@ void vicii_init_vsp_bug(void)
     /* get a random mask for channels that we want to make immune */
     val = lib_unsigned_rand(0, 0xff);
     log_message(vicii.log,
-            "VSP Bug: safe channels are: %s%s%s%s%s%s%s%s. Emulation of memory corruption is %s.",
+            "VSP Bug: safe channels are: %s%s%s%s%s%s%s%s.",
             (val & 1) ? "0" : "",
             (val & 2) ? "1" : "",
             (val & 4) ? "2" : "",
@@ -287,8 +297,7 @@ void vicii_init_vsp_bug(void)
             (val & 0x10) ? "4" : "",
             (val & 0x20) ? "5" : "",
             (val & 0x40) ? "6" : "",
-            (val & 0x80) ? "7" : "",
-            vicii_resources.vsp_bug_enabled ? "enabled" : "disabled"
+            (val & 0x80) ? "7" : ""
                );
     for (i = 0; i < 8; i++) {
         if (val & 1) {
@@ -339,7 +348,7 @@ static inline void vicii_handle_vsp_bug(void)
     /* simulate the "VSP bug" problem */
     if(vicii_resources.vsp_bug_enabled) {
         if((vsp_buglines[line] + vsp_bugchannels[channel] + lib_unsigned_rand(0, 1)) > VSP_PROB_THRESH) {
-            for(page = 0x00; page < 0xff; page++) {
+            for(page = 0x00; page <= 0xff; page++) {
                 /* keep 98,5% of all pages untouched. this is hand tweaked to result in
                  * somewhat convincing long term plots in vsp-lab */
                 if (lib_unsigned_rand(0, 1000) > 985) {

@@ -292,6 +292,10 @@ static int init_joyport_ports(void)
    the machine itself with `machine_init()'.  */
 int machine_resources_init(void)
 {
+    if (parallel_resources_init() < 0) {
+        init_resource_fail("parallel");
+        return -1;
+    }
     if (traps_resources_init() < 0) {
         init_resource_fail("traps");
         return -1;
@@ -441,6 +445,10 @@ void machine_resources_shutdown(void)
 /* CBM-II-specific command-line option initialization.  */
 int machine_cmdline_options_init(void)
 {
+    if (parallel_cmdline_options_init() < 0) {
+        init_cmdline_options_fail("parallel");
+        return -1;
+    }
     if (traps_cmdline_options_init() < 0) {
         init_cmdline_options_fail("traps");
         return -1;
@@ -807,6 +815,7 @@ void machine_specific_powerup(void)
     tapeport_powerup();
     joyport_powerup();
     cartridge_powerup();
+    mem_powerup();
 }
 
 void machine_specific_shutdown(void)
@@ -824,6 +833,8 @@ void machine_specific_shutdown(void)
 #ifdef HAVE_MOUSE
     mouse_shutdown();
 #endif
+
+    sid_cmdline_options_shutdown();
 
     if (!console_mode) {
         cbm2ui_shutdown();

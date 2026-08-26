@@ -498,7 +498,9 @@ static int sdl_ui_display_item(ui_menu_entry_t *item, int y_pos, int value_offse
     const char *itemdata;
     uint8_t oldbg = 0, oldfg = 1;
 
-    if ((item->string == NULL) || (item->string[0] == 0)) {
+    if ((item == NULL) ||
+        (item->string == NULL) ||
+        (item->string[0] == 0)) {
         return -1;
     }
 
@@ -619,7 +621,8 @@ static void sdl_ui_menu_redraw(ui_menu_entry_t *menu, const char *title, int off
     sdl_ui_clear();
     sdl_ui_display_title(title);
 
-    while ((menu[i + offset].string != NULL) && (i <= (menu_draw.max_text_y - MENU_FIRST_Y))) {
+    while ((menu[i + offset].string != NULL) &&
+           (i <= (menu_draw.max_text_y - MENU_FIRST_Y))) {
         sdl_ui_display_item(&(menu[i + offset]), i, value_offsets[i + offset], (i == cur_offset));
         ++i;
     }
@@ -1163,6 +1166,9 @@ static int sdl_ui_readline_input(SDLKey *key, SDLMod *mod, Uint16 *c_uni)
 #endif
 
     do {
+        joystick_device_t *joydev = NULL;
+        int                joynum = -1;
+
         SDL_WaitEvent(&e);
 
         switch (e.type) {
@@ -1198,13 +1204,21 @@ static int sdl_ui_readline_input(SDLKey *key, SDLMod *mod, Uint16 *c_uni)
 
 #ifdef HAVE_SDL_NUMJOYSTICKS
             case SDL_JOYAXISMOTION:
-                sdljoy_axis_event(e.jaxis.which, e.jaxis.axis, e.jaxis.value);
+                if (sdljoy_get_joy_for_event(e.jaxis.which, &joydev, &joynum)) {
+                    sdljoy_axis_event(joynum, e.jaxis.axis, e.jaxis.value);
+                }
                 break;
-            case SDL_JOYBUTTONDOWN:
-                joy_button_event(e.jbutton.which, e.jbutton.button, 1);
+            case SDL_JOYBUTTONDOWN: /* fall through */
+            case SDL_JOYBUTTONUP:
+                if (sdljoy_get_joy_for_event(e.jbutton.which, &joydev, &joynum)) {
+                    joy_button_event(joydev->buttons[e.jbutton.button],
+                                     e.type == SDL_JOYBUTTONDOWN ? 1 : 0);
+                }
                 break;
             case SDL_JOYHATMOTION:
-                joy_hat_event(e.jhat.which, e.jhat.hat, e.jhat.value);
+                if (sdljoy_get_joy_for_event(e.jhat.which, &joydev, &joynum)) {
+                    joy_hat_event(joydev->hats[e.jhat.hat], e.jhat.value);
+                }
                 break;
 #endif
             default:
@@ -1422,11 +1436,10 @@ menufont_t *sdl_ui_get_menu_font(void)
 void sdl_ui_activate_pre_action(void)
 {
     DBG(("sdl_ui_activate_pre_action start"));
-#ifdef HAVE_FFMPEG
+
     if (screenshot_is_recording()) {
         screenshot_stop_recording();
     }
-#endif
 
     vsync_suspend_speed_eval();
     sound_suspend();

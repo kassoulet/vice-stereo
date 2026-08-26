@@ -148,13 +148,13 @@ endif MACOS_COMPILE
 if WINDOWS_COMPILE
 if USE_GTK3UI
 bindist:
-	$(SHELL) @ARCH_SRC_DIR@/make-bindist_win32.sh $(STRIP) $(VICE_VERSION) @ENABLE_ARCH@ nozip @UNZIPBIN@ $(X64_INCLUDED) $(top_srcdir) $(host_cpu) $(abs_top_builddir) $(CROSS) $(objdump) $(CC) $(HTMLDOCS) $(SVN_REVISION_OVERRIDE)
+	$(SHELL) @ARCH_SRC_DIR@/make-bindist_win32.sh $(STRIP) $(VICE_VERSION) @ENABLE_ARCH@ nozip @UNZIPBIN@ $(X64_INCLUDED) $(top_srcdir) $(host_cpu) $(abs_top_builddir) $(objdump) $(CC) $(HTMLDOCS) $(SVN_REVISION_OVERRIDE)
 
 bindistzip:
-	$(SHELL) @ARCH_SRC_DIR@/make-bindist_win32.sh $(STRIP) $(VICE_VERSION) @ENABLE_ARCH@ zip @UNZIPBIN@ $(X64_INCLUDED) $(top_srcdir) $(host_cpu) $(abs_top_builddir) $(CROSS) $(objdump) $(CC) $(HTML_DOCS) $(SVN_REVISION_OVERRIDE)
+	$(SHELL) @ARCH_SRC_DIR@/make-bindist_win32.sh $(STRIP) $(VICE_VERSION) @ENABLE_ARCH@ zip @UNZIPBIN@ $(X64_INCLUDED) $(top_srcdir) $(host_cpu) $(abs_top_builddir) $(objdump) $(CC) $(HTML_DOCS) $(SVN_REVISION_OVERRIDE)
 
 bindist7zip:
-	$(SHELL) @ARCH_SRC_DIR@/make-bindist_win32.sh $(STRIP) $(VICE_VERSION) @ENABLE_ARCH@ 7zip @UNZIPBIN@ $(X64_INCLUDED) $(top_srcdir) $(host_cpu) $(abs_top_builddir) $(CROSS) $(objdump) $(CC) $(HTML_DOCS) $(SVN_REVISION_OVERRIDE)
+	$(SHELL) @ARCH_SRC_DIR@/make-bindist_win32.sh $(STRIP) $(VICE_VERSION) @ENABLE_ARCH@ 7zip @UNZIPBIN@ $(X64_INCLUDED) $(top_srcdir) $(host_cpu) $(abs_top_builddir) $(objdump) $(CC) $(HTML_DOCS) $(SVN_REVISION_OVERRIDE)
 endif USE_GTK3UI
 
 if USE_SDLUI
@@ -244,14 +244,14 @@ endif
 
 # Manually define the dist targets so the correct tar usage will be used.
 dist-gzip:
-	$(DOS2UNIX) `find $(top_srcdir) -name "*.sh"`
+	$(DOS2UNIX) `find $(top_srcdir) -not -path "*/src/lib/*" -name "*.sh"`
 	$(DOS2UNIX) $(top_srcdir)/doc/vice.texi
 	$(MAKE) distdir
 	$(AMTAR) chf - $(distdir) | gzip --best -c >$(distdir).tar.gz
 	$(am__remove_distdir)
 
 dist dist-all:
-	$(DOS2UNIX) `find $(top_srcdir) -name "*.sh"`
+	$(DOS2UNIX) `find $(top_srcdir) -not -path "*/src/lib/*" -name "*.sh"`
 	$(DOS2UNIX) $(top_srcdir)/doc/vice.texi
 	$(MAKE) distdir
 	$(AMTAR) chf - $(distdir) | gzip --best -c >$(distdir).tar.gz

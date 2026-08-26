@@ -106,6 +106,14 @@
 
 #include "uistatusbar.h"
 
+/* #define DEBUG_STATUSBAR */
+
+#ifdef DEBUG_STATUSBAR
+#define DBG(x) log_printf x
+#else
+#define DBG(x)
+#endif
+
 
 /** \brief The maximum number of status bars we will permit to exist at once. */
 #define MAX_STATUS_BARS 3
@@ -842,9 +850,11 @@ static gboolean draw_joyport_cb(GtkWidget *widget, cairo_t *cr, gpointer data)
     /* Fire buttons: Bits 4-6. Each of the three notional fire buttons
      * controls the red, green, or blue color of the fire button
      * area. By default, we are using one-button joysticks and so this
-     * region will be either black or red. */
-    cairo_set_source_rgb(cr, (val&0x10) ? 1 : 0,
-                             (val&0x20) ? 1 : 0,
+     * region will be either black or red.
+     * We add to R & G if button 3 is pressed, otherwise the pure blue
+     * is virtually invisible. It's now a perceptable bluish gray. */
+    cairo_set_source_rgb(cr, (val&0x10) ? 1 : (val&0x40) ? 0.5 : 0,
+                             (val&0x20) ? 1 : (val&0x40) ? 0.5 : 0,
                              (val&0x40) ? 1 : 0);
     cairo_rectangle(cr, x + e + 2*s, y + e + 2*s, e, e);
     cairo_fill(cr);
@@ -2891,7 +2901,7 @@ void ui_display_playback(int playback_status, char *version)
 void ui_display_recording(int recording_status)
 {
     GtkWidget *widget;
-
+    DBG(("ui_display_recording: %d", recording_status));
     /* Ok to call from VICE thread */
     widget = allocated_bars[0].record;
     statusbar_recording_widget_set_recording_status(widget, recording_status);

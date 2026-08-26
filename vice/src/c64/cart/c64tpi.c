@@ -310,7 +310,7 @@ static uint8_t read_pa(tpi_context_t *tpi_ctx)
 {
     uint8_t byte;
 
-    drive_cpu_execute_all(maincpu_clk);
+    drive_catch_up_hook(maincpu_clk);
 
     byte = 0xff;
     if (ieee_is_out) {
@@ -344,7 +344,7 @@ static uint8_t read_pb(tpi_context_t *tpi_ctx)
 {
     uint8_t byte;
 
-    drive_cpu_execute_all(maincpu_clk);
+    drive_catch_up_hook(maincpu_clk);
 
     byte = ieee_is_out ? 0xff : parallel_bus;
     byte = (byte & ~(tpi_ctx->c_tpi)[TPI_DDPB])
@@ -529,6 +529,9 @@ static const resource_int_t resources_int[] = {
 
 int tpi_resources_init(void)
 {
+    if (parallel_resources_init() < 0) {
+        return -1;
+    }
     if (resources_register_string(resources_string) < 0) {
         return -1;
     }
@@ -559,6 +562,9 @@ static const cmdline_option_t cmdline_options[] =
 
 int tpi_cmdline_options_init(void)
 {
+    if (parallel_cmdline_options_init() < 0) {
+        return -1;
+    }
     return cmdline_register_options(cmdline_options);
 }
 

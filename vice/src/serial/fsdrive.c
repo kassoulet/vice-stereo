@@ -184,7 +184,7 @@ static uint8_t serialcommand(unsigned int device, uint8_t secondary)
             break;
 
         default:
-            log_error(fsdrive_log, "Unknown command %02X.", secondary & 0xff);
+            log_error(fsdrive_log, "Unknown command %02X.", (unsigned int)(secondary & 0xff));
     }
 
     return st;
@@ -374,12 +374,12 @@ void fsdrive_snapshot_prepare(void)
 }
 
 /*
-   This is the format of the FSDrive snapshot module.
+   This is the format of the FSDrive 0.0 snapshot module.
 
-   Name               Type   Size   Description
-
-   SerialBuffer       BYTE   256    The serial buffer as it was when the machine saved
-   SerialPtr          WORD   1      The current position in the serial buffer
+    Type     | Name              | Description
+    ------------------------------------------
+    256*BYTE | SerialBuffer      | The serial buffer as it was when the machine saved
+    WORD     | SerialPtr         | The current position in the serial buffer
  */
 
 static char snap_module_name[] = "FSDRIVE";

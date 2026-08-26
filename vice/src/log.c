@@ -171,10 +171,10 @@ static void log_file_close(void)
 {
     DBG(("log_file_close %p\n", log_file));
     if (log_file) {
+        fflush(log_file);
         if (log_file != stdout) {
             fclose(log_file);
         }
-        fflush(log_file);
         log_file = NULL;
     }
 }
@@ -191,6 +191,11 @@ int log_set_limit(int n)
 
     log_limit = n;
     UNLOCK_AND_RETURN_INT(0);
+}
+
+int log_get_limit(void)
+{
+    return log_limit;
 }
 
 /* called by code that is executed *before* the resources are registered */
@@ -610,7 +615,7 @@ static int log_archdep(const char *pretxt, const char *logtxt)
     const char *end = logtxt + strlen(logtxt) + 1;
 
     while (beg < end) {
-        char *eol = strchr(beg, '\n');
+        char *eol = (char*)strchr(beg, '\n');
 
         if (eol) {
             *eol = '\0';
@@ -730,8 +735,13 @@ static int log_helper(log_t log, unsigned int level, const char *format,
     } else {
         pretxt = lib_msprintf(LOG_COL_LWHITE "%s" LOG_COL_OFF ": %s", logs[logi], lvlstr);
     }
+
     /* build the log string */
     logtxt = lib_mvsprintf(format, ap);
+    if (logtxt == NULL) {
+        fprintf(stderr, "log_helper: internal error (lib_mvsprintf returned NULL)\n");
+        return -1;
+    }
 
     if ((log_to_file) || (!log_colorize)) {
         nocolorpre = logskipcolors(pretxt);

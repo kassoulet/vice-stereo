@@ -44,7 +44,7 @@
 
 /* FIXME: this code should be a wrapper to the functions in src/iecbus/iecbus.c
           and not implement the IEC stuff right here - this is needed to make the
-          "IECDevice" implementation work in xvic as well */
+          "BusDevice" implementation work in xvic as well */
 
 #define NOT(x) ((x) ^ 1)
 
@@ -117,6 +117,7 @@ void iec_drive_write(uint8_t data, unsigned int dnr)
     resolve_bus_signals();
 }
 
+/* This function must have no side effects */
 uint8_t iec_drive_read(unsigned int dnr)
 {
     uint8_t drive_bus_val;
@@ -129,24 +130,29 @@ uint8_t iec_drive_read(unsigned int dnr)
 /*
    The VIC20 has a strange bus layout for the serial IEC bus.
 
-     VIA1 CA2 CLK out
-     VIA1 CB1 SRQ in
-     VIA1 CB2 DATA out
-     VIA2 PA0 CLK in
-     VIA2 PA1 DATA in
-     VIA2 PA7 ATN out
+     VIA1 PA0 CLK in
+     VIA1 PA1 DATA in
+     VIA1 PA7 ATN out
+     VIA2 CA2 CLK out
+     VIA2 CB1 SRQ in
+     VIA2 CB2 DATA out
 
  */
 
-/* These two routines are called for VIA2 Port A. */
+/* These two routines are called for VIA1 Port A. */
 
-uint8_t iec_pa_read(void)
+uint8_t iec_pa_peek(void)
 {
-    drive_cpu_execute_all(maincpu_clk);
-
     cpu_bus_val = (bus_data << 1) | bus_clock | (NOT(bus_atn) << 7);
 
     return cpu_bus_val;
+}
+
+uint8_t iec_pa_read(void)
+{
+    drive_catch_up_hook(maincpu_clk);
+
+    return iec_pa_peek();
 }
 
 /* NOTE: when adding drives, do the equivalent change in src/iecbus/iecbus.c */
@@ -154,7 +160,7 @@ void iec_pa_write(uint8_t data)
 {
     unsigned int i;
 
-    drive_cpu_execute_all(maincpu_clk);
+    drive_catch_up_hook(maincpu_clk);
 
     /* Signal ATN interrupt to the drives.  */
     if ((cpu_atn == 0) && (data & 128)) {
@@ -213,7 +219,7 @@ void iec_pa_write(uint8_t data)
 }
 
 
-/* This routine is called for VIA1 PCR (= CA2 and CB2).
+/* This routine is called for VIA2 PCR (= CA2 and CB2).
    Although Cx2 uses three bits for control, we assume the calling routine has
    set bit 5 and bit 1 to the real output value for CB2 (DATA out) and CA2
    (CLK out) resp. (25apr1997 AF) */
@@ -222,7 +228,7 @@ void iec_pcr_write(uint8_t data)
 {
     unsigned int i;
 
-    drive_cpu_execute_all(maincpu_clk);
+    drive_catch_up_hook(maincpu_clk);
 
     cpu_data = ((data & 32) >> 5);
     cpu_clock = ((data & 2) >> 1);

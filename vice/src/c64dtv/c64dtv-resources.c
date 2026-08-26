@@ -34,7 +34,7 @@
 #include "c64rom.h"
 #include "cartridge.h"
 #include "hummeradc.h"
-#include "ps2mouse.h"
+#include "userport_ps2mouse.h"
 #include "kbd.h"
 #include "keyboard.h"
 #include "lib.h"
@@ -65,6 +65,8 @@ static char *basic_rom_name = NULL;
 /* Name of the Kernal ROM.  */
 static char *kernal_rom_name = NULL;
 
+int kernal_revision = C64_KERNAL_REV3;
+
 static int set_chargen_rom_name(const char *val, void *param)
 {
     if (util_string_set(&chargen_rom_name, val)) {
@@ -80,7 +82,7 @@ static int set_kernal_rom_name(const char *val, void *param)
         return 0;
     }
 
-    return c64rom_load_kernal(kernal_rom_name, NULL);
+    return c64rom_load_kernal(kernal_rom_name);
 }
 
 static int set_basic_rom_name(const char *val, void *param)
@@ -147,14 +149,6 @@ static int set_power_freq(int val, void *param)
 }
 #endif
 
-int c64dtv_hummer_adc_enabled = 0;
-
-static int c64dtv_hummer_adc_set(int val, void *param)
-{
-    c64dtv_hummer_adc_enabled = val ? 1 : 0;
-    return 0;
-}
-
 static const resource_string_t resources_string[] = {
     { "ChargenName", C64_CHARGEN_NAME, RES_EVENT_NO, NULL,
       /* FIXME: should be same but names may differ */
@@ -171,8 +165,6 @@ static const resource_string_t resources_string[] = {
 static const resource_int_t resources_int[] = {
     { "MachineVideoStandard", MACHINE_SYNC_PAL, RES_EVENT_SAME, NULL,
       &sync_factor, set_sync_factor, NULL },
-    { "HummerADC", 0, RES_EVENT_SAME, NULL,
-      (int *)&c64dtv_hummer_adc_enabled, c64dtv_hummer_adc_set, NULL },
     RESOURCE_INT_LIST_END
 };
 

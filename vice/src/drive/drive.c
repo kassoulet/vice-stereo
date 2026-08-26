@@ -113,13 +113,18 @@ void drive_set_disk_memory(uint8_t *id, unsigned int track, unsigned int sector,
         || unit->type == DRIVE_TYPE_1570
         || unit->type == DRIVE_TYPE_1571
         || unit->type == DRIVE_TYPE_1571CR) {
+        /* disk id drive 0 */
         unit->drive_ram[0x12] = id[0];
         unit->drive_ram[0x13] = id[1];
+        /* header block */
         unit->drive_ram[0x16] = id[0];
         unit->drive_ram[0x17] = id[1];
         unit->drive_ram[0x18] = track;
         unit->drive_ram[0x19] = sector;
+        /* current track drive 0 */
         unit->drive_ram[0x22] = track;
+        /* last read sector */
+        unit->drive_ram[0x4c] = sector;
     }
 }
 
@@ -134,6 +139,7 @@ void drive_set_last_read(unsigned int track, unsigned int sector, uint8_t *buffe
     /* TODO: drive 1 ? */
     drive_gcr_data_writeback(drive);
 
+    /* FIXME: handle all drives here */
     if (unit->type == DRIVE_TYPE_1570
         || unit->type == DRIVE_TYPE_1571
         || unit->type == DRIVE_TYPE_1571CR) {
@@ -145,13 +151,17 @@ void drive_set_last_read(unsigned int track, unsigned int sector, uint8_t *buffe
     /* TODO: drive 1 ? */
     drive_set_half_track(track * 2, side, drive);
 
+    /* FIXME: handle all drives here */
     if (unit->type == DRIVE_TYPE_1540
         || unit->type == DRIVE_TYPE_1541
         || unit->type == DRIVE_TYPE_1541II
         || unit->type == DRIVE_TYPE_1570
         || unit->type == DRIVE_TYPE_1571
-        || unit->type == DRIVE_TYPE_1571CR) {
-        memcpy(&(unit->drive_ram[0x0400]), buffer, 256);
+        || unit->type == DRIVE_TYPE_1571CR
+        || unit->type == DRIVE_TYPE_2031) {
+        memcpy(&(unit->drive_ram[0x0400]), buffer, 256 * 2);
+    } else if (unit->type == DRIVE_TYPE_1551) {
+        memcpy(&(unit->drive_ram[0x0500]), buffer, 256 * 2);
     }
 }
 
@@ -195,6 +205,7 @@ int drive_init(void)
 
     }
 
+    /* NOTE: this will not actually load the images yet, only check of the ROMs exist */
     driverom_load_images();
     /* Do not error out if _SOME_ images are not found, ie. FD2K/4K, CMDHD */
 #if 0
@@ -207,8 +218,7 @@ int drive_init(void)
     }
 #endif
 
-    log_message(drive_log, "Finished loading ROM images.");
-    rom_loaded = 1;
+    rom_loaded = 1; /* mark drive ROMs being tested OK */
 
     for (unit = 0; unit < NUM_DISK_UNITS; unit++) {
         diskunit_context_t *diskunit = diskunit_context[unit];
@@ -220,8 +230,11 @@ int drive_init(void)
             resources_set_int_sprintf("Drive%uType", DRIVE_TYPE_NONE, unit + 8);
         }
 
+        /* This will trigger loading the ROM if needed */
         machine_drive_rom_setup_image(unit);
     }
+
+    log_verbose(drive_log, "Finished loading ROM images.");
 
     for (unit = 0; unit < NUM_DISK_UNITS; unit++) {
         diskunit_context_t *diskunit = diskunit_context[unit];
@@ -273,7 +286,8 @@ int drive_init(void)
         rotation_init((diskunit->clock_frequency == 2) ? 1 : 0, unit);
         rotation_reset(drive);
 
-        if (diskunit->type == DRIVE_TYPE_2000 || diskunit->type == DRIVE_TYPE_4000 ||
+        if (diskunit->type == DRIVE_TYPE_2000 ||
+            diskunit->type == DRIVE_TYPE_4000 ||
             diskunit->type == DRIVE_TYPE_CMDHD) {
             drivecpu65c02_init(diskunit, diskunit->type);
         } else {
@@ -539,12 +553,15 @@ void drive_disable(diskunit_context_t *drv)
     resources_get_int_sprintf("Drive%uTrueEmulation", &drive_true_emulation, 8 + drv->mynumber);
 
     if (rom_loaded) {
-        if (drv->type == DRIVE_TYPE_2000 || drv->type == DRIVE_TYPE_4000 ||
+#if 0
+        if (drv->type == DRIVE_TYPE_2000 ||
+            drv->type == DRIVE_TYPE_4000 ||
             drv->type == DRIVE_TYPE_CMDHD) {
-            drivecpu65c02_sleep(drv);
+            /*drivecpu65c02_sleep(drv);*/
         } else {
-            drivecpu_sleep(drv);
+            /*drivecpu_sleep(drv);*/
         }
+#endif
         machine_drive_port_default(drv);
 
         for (drive = 0; drive < NUM_DRIVES; drive++) {
@@ -903,7 +920,13 @@ static void drive_led_update(diskunit_context_t *unit, drive_t *drive, int base)
            and the LED was on */
         led_pwm1 = 1000;
     } else {
-        led_pwm1 = (int)(drive->led_active_ticks / led_period * 1000);
+        led_pwm1 = (int)((drive->led_active_ticks * 1000) / led_period);
+        /* With the 1541's real LED, the human eye perceives brightness much earlier in the PWM
+        * duty cycle range; the blog post at
+        * https://blog.mbedded.ninja/programming/firmware/controlling-led-brightness-using-pwm/
+        * describes this. so adjust our output intensity level to compensate, using a square
+        * root power function to produce higher RGB outputs at lower PWM duty cycle levels. */
+        led_pwm1 = 1000 * sqrt((float) led_pwm1 / 1000.0);
     }
     assert(led_pwm1 <= MAX_PWM);
     if (led_pwm1 > MAX_PWM) {
@@ -979,9 +1002,11 @@ int drive_num_leds(unsigned int dnr)
     }
 }
 
+/* run drive cpu for given main clock value */
 void drive_cpu_execute_one(diskunit_context_t *drv, CLOCK clk_value)
 {
-    if (drv->type == DRIVE_TYPE_2000 || drv->type == DRIVE_TYPE_4000 ||
+    if (drv->type == DRIVE_TYPE_2000 ||
+        drv->type == DRIVE_TYPE_4000 ||
         drv->type == DRIVE_TYPE_CMDHD) {
         drivecpu65c02_execute(drv, clk_value);
     } else {
@@ -989,6 +1014,7 @@ void drive_cpu_execute_one(diskunit_context_t *drv, CLOCK clk_value)
     }
 }
 
+/* execute the CPU of all (enabled) drives */
 void drive_cpu_execute_all(CLOCK clk_value)
 {
     unsigned int dnr;
@@ -1002,9 +1028,11 @@ void drive_cpu_execute_all(CLOCK clk_value)
     }
 }
 
+
 void drive_cpu_set_overflow(diskunit_context_t *drv)
 {
-    if (drv->type == DRIVE_TYPE_2000 || drv->type == DRIVE_TYPE_4000 ||
+    if (drv->type == DRIVE_TYPE_2000 ||
+        drv->type == DRIVE_TYPE_4000 ||
         drv->type == DRIVE_TYPE_CMDHD) {
         /* nothing */
     } else {
@@ -1012,7 +1040,65 @@ void drive_cpu_set_overflow(diskunit_context_t *drv)
     }
 }
 
-/* This is called at every vsync. */
+/* make given drive catch up with the given (main-) clock
+   Updates the given drive eg before a IEC port line is read or written,
+   _unless_ the "no idle" mode is active.
+*/
+void drive_catch_up_one_hook(diskunit_context_t *unit, CLOCK clk_value)
+{
+    if (unit->enable) {
+        /* CAUTION: In theory we never need to catch up in "no idle" mode,
+                    but if we don't do it a bunch of tests break. */
+        /* if (unit->idling_method != DRIVE_IDLE_NO_IDLE) */
+        {
+            drive_cpu_execute_one(unit, clk_value);
+        }
+    }
+}
+
+
+/* make all drives catch up with the given (main-) clock
+   Updates all drives eg before a IEC port line is read or written,
+   _unless_ the "no idle" mode is active.
+*/
+void drive_catch_up_hook(CLOCK clk_value)
+{
+    unsigned int dnr;
+    for (dnr = 0; dnr < NUM_DISK_UNITS; dnr++) {
+        drive_catch_up_one_hook(diskunit_context[dnr], clk_value);
+    }
+}
+
+
+/* This is called after every main CPU instruction
+
+   Updates the drives in each iteration of the main loop,
+   _if_ the "no idle" mode is active.
+*/
+void drive_cycle_hook(void)
+{
+    unsigned int dnr;
+    for (dnr = 0; dnr < NUM_DISK_UNITS; dnr++) {
+        diskunit_context_t *unit = diskunit_context[dnr];
+        drive_t *drive = unit->drives[0];
+
+        if (unit->enable) {
+            if (unit->idling_method == DRIVE_IDLE_NO_IDLE) {
+                drive_cpu_execute_one(diskunit_context[dnr], maincpu_clk);
+                /* if drive is never idle, also rotate the disk. */
+
+                /* TODO: drive 1 */
+                rotation_rotate_disk(drive);
+            }
+            /* printf("drive_cycle_hook drv %d @clk:%d\n", dnr, maincpu_clk); */
+        }
+    }
+}
+
+/* This is called at every vsync.
+   runs all drives at the end of each frame,
+   _if_ "Frame idle" is active.
+*/
 void drive_vsync_hook(void)
 {
     unsigned int dnr;
@@ -1024,17 +1110,22 @@ void drive_vsync_hook(void)
         drive_t *drive = unit->drives[0];
 
         if (unit->enable) {
-            if (unit->idling_method != DRIVE_IDLE_SKIP_CYCLES) {
-                drive_cpu_execute_one(diskunit_context[dnr], maincpu_clk);
-            }
-            if (unit->idling_method == DRIVE_IDLE_NO_IDLE) {
-                /* if drive is never idle, also rotate the disk. this prevents
-                 * huge peaks in cpu usage when the drive must catch up with
-                 * a longer period of time.
-                 */
-                /* TODO: drive 1 */
-                rotation_rotate_disk(drive);
-            }
+            /*if (unit->idling_method != DRIVE_IDLE_NO_IDLE) {*/
+#if 0
+                if (unit->idling_method == DRIVE_IDLE_TRAP_IDLE) {
+                    drive_cpu_execute_one(diskunit_context[dnr], maincpu_clk);
+                }
+#endif
+                if (unit->idling_method == DRIVE_IDLE_FRAME_IDLE) {
+                    drive_cpu_execute_one(diskunit_context[dnr], maincpu_clk);
+                    /* Also rotate the disk. this prevents huge peaks in cpu
+                       usage when the drive must catch up with a longer period
+                       of time. */
+
+                    /* TODO: drive 1 */
+                    rotation_rotate_disk(drive);
+                }
+            /*}*/
             /* printf("drive_vsync_hook drv %d @clk:%d\n", dnr, maincpu_clk); */
         }
     }

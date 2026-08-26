@@ -44,8 +44,11 @@ enum {
     SID_ENGINE_RESID,
     SID_ENGINE_CATWEASELMKIII,
     SID_ENGINE_HARDSID,
-    SID_ENGINE_PARSID
+    SID_ENGINE_PARSID,      /* CAUTION: actually 3 engines, one per LPT */
+    SID_ENGINE_USBSID = 7,
+    SID_ENGINE_RESIDFP
 };
+
 
 #define SID_ENGINE_DEFAULT       99
 
@@ -53,10 +56,13 @@ enum {
  */
 
 /** \brief  Maximum number of supported SIDs for the FastSID engine */
-#define SID_ENGINE_FASTSID_NUM_SIDS         4
+#define SID_ENGINE_FASTSID_NUM_SIDS         8
 
 /** \brief  Maximum number of supported SIDs for the ReSID engine */
-#define SID_ENGINE_RESID_NUM_SIDS           4
+#define SID_ENGINE_RESID_NUM_SIDS           8
+
+/** \brief  Maximum number of supported SIDs for the ReSIDfp engine */
+#define SID_ENGINE_RESIDFP_NUM_SIDS         8
 
 /** \brief  Maximum number of supported SIDs for the Catweasel Mk3 engine */
 #define SID_ENGINE_CATWEASELMKIII_NUM_SIDS  2
@@ -66,6 +72,9 @@ enum {
 
 /** \brief  Maximum number of supported SIDs for the ParSID engine */
 #define SID_ENGINE_PARSID_NUM_SIDS          1
+
+/** \brief  Maximum number of supported SIDs for the USBSID engine */
+#define SID_ENGINE_USBSID_NUM_SIDS          4
 
 enum {
     SID_RESID_SAMPLING_FAST = 0,
@@ -95,14 +104,18 @@ enum {
 #define SID_CATWEASELMKIII        (SID_ENGINE_CATWEASELMKIII << 8)
 #define SID_HARDSID               (SID_ENGINE_HARDSID << 8)
 #define SID_PARSID                (SID_ENGINE_PARSID << 8)
+#define SID_USBSID                (SID_ENGINE_USBSID << 8)
+#define SID_RESIDFP_6581          ((SID_ENGINE_RESIDFP << 8) | SID_MODEL_6581)
+#define SID_RESIDFP_8580          ((SID_ENGINE_RESIDFP << 8) | SID_MODEL_8580)
+#define SID_RESIDFP_8580D         ((SID_ENGINE_RESIDFP << 8) | SID_MODEL_8580D)
 
 #define SIDTYPE_SID       0
 #define SIDTYPE_SIDDTV    1
-#define SIDTYPE_SIDCART   2
+#define SIDTYPE_SIDCART   2     /* used by machines that don't have an internal SID */
 
-#define SID_MACHINE_MAX_SID_C64     8
+#define SID_MACHINE_MAX_SID_C64     10
 #define SID_MACHINE_MAX_SID_C64DTV  1
-#define SID_MACHINE_MAX_SID_C128    8
+#define SID_MACHINE_MAX_SID_C128    10
 
 /** \brief  The VIC20 has an optional SID cartridge */
 #define SID_MACHINE_MAX_SID_VIC20   1
@@ -116,12 +129,11 @@ enum {
 /** \brief  The PET has an optional SID Card expansion */
 #define SID_MACHINE_MAX_SID_PET     1
 
-/** \brief  VSID supports up to three SIDS
+/** \brief  VSID supports as many SIDs as C64
  *
- * This can be the same as C64 in emulation, but PSID currently only manages 3
- * SIDs.
+ * This can be the same as C64 in emulation
  */
-#define SID_MACHINE_MAX_SID_VSID    3
+#define SID_MACHINE_MAX_SID_VSID    SID_MACHINE_MAX_SID_C64
 
 
 #define RESID_6581_PASSBAND_MIN             0
@@ -155,6 +167,27 @@ enum {
 #define RESID_8580_FILTER_BIAS_DEFAULT      0
 
 
+#define RESIDFP_6581_FILTER_CURVE_MIN             0
+#define RESIDFP_6581_FILTER_CURVE_MAX             1000
+#define RESIDFP_6581_FILTER_CURVE_ONE             1000
+#define RESIDFP_6581_FILTER_CURVE_DEFAULT         500
+
+#define RESIDFP_6581_FILTER_RANGE_MIN             0
+#define RESIDFP_6581_FILTER_RANGE_MAX             1000
+#define RESIDFP_6581_FILTER_RANGE_ONE             1000
+#define RESIDFP_6581_FILTER_RANGE_DEFAULT         500
+
+#define RESIDFP_8580_FILTER_CURVE_MIN             0
+#define RESIDFP_8580_FILTER_CURVE_MAX             1000
+#define RESIDFP_8580_FILTER_CURVE_ONE             1000
+#define RESIDFP_8580_FILTER_CURVE_DEFAULT         500
+
+#define RESIDFP_COMBINED_WAVEFORM_STRENGTH_MIN      0
+#define RESIDFP_COMBINED_WAVEFORM_STRENGTH_MAX      2
+#define RESIDFP_COMBINED_WAVEFORM_STRENGTH_ONE      1
+#define RESIDFP_COMBINED_WAVEFORM_STRENGTH_DEFAULT  1
+
+
 void machine_sid2_enable(int val);
 
 uint8_t sid_read(uint16_t address);
@@ -165,6 +198,8 @@ uint8_t sid5_read(uint16_t address);
 uint8_t sid6_read(uint16_t address);
 uint8_t sid7_read(uint16_t address);
 uint8_t sid8_read(uint16_t address);
+uint8_t sid9_read(uint16_t address);
+uint8_t sid10_read(uint16_t address);
 
 uint8_t sid_peek(uint16_t address);
 uint8_t sid2_peek(uint16_t address);
@@ -174,6 +209,8 @@ uint8_t sid5_peek(uint16_t address);
 uint8_t sid6_peek(uint16_t address);
 uint8_t sid7_peek(uint16_t address);
 uint8_t sid8_peek(uint16_t address);
+uint8_t sid9_peek(uint16_t address);
+uint8_t sid10_peek(uint16_t address);
 
 void sid_store(uint16_t address, uint8_t byte);
 void sid2_store(uint16_t address, uint8_t byte);
@@ -183,6 +220,8 @@ void sid5_store(uint16_t address, uint8_t byte);
 void sid6_store(uint16_t address, uint8_t byte);
 void sid7_store(uint16_t address, uint8_t byte);
 void sid8_store(uint16_t address, uint8_t byte);
+void sid9_store(uint16_t address, uint8_t byte);
+void sid10_store(uint16_t address, uint8_t byte);
 
 int sid_dump(void);
 int sid2_dump(void);
@@ -192,6 +231,8 @@ int sid5_dump(void);
 int sid6_dump(void);
 int sid7_dump(void);
 int sid8_dump(void);
+int sid9_dump(void);
+int sid10_dump(void);
 
 void sid_reset(void);
 

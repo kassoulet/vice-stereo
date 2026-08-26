@@ -355,14 +355,21 @@ void partner128_powerup(void)
 
 /* ---------------------------------------------------------------------*/
 
-/* PARTNER128 snapshot module format:
+/* PARTNER128 0.1 snapshot module format:
 
-    FIXME
- */
+   type  | name                 | description
+   ------------------------------------------
+   BYTE  | regvalue             |
+   BYTE  | rambank              |
+   BYTE  | isdefreezing         |
+   ARRAY | nmivector            | 2 bytes
+   ARRAY | ext_function_rom     | PARTNER_ROM_SIZE
+   ARRAY | rambanks             | PARTNER_RAM_SIZE
+*/
 
 static char snap_module_name[] = "PARTNER128";
 #define SNAP_MAJOR   0
-#define SNAP_MINOR   0
+#define SNAP_MINOR   1
 
 int partner128_snapshot_write_module(snapshot_t *s)
 {
@@ -375,6 +382,16 @@ int partner128_snapshot_write_module(snapshot_t *s)
     }
 
     /* FIXME */
+    if (0
+        || SMW_B(m, regvalue) < 0
+        || SMW_B(m, rambank) < 0
+        || SMW_B(m, isdefreezing) < 0
+        || (SMW_BA(m, nmivector, 2) < 0)
+        || (SMW_BA(m, ext_function_rom, PARTNER_ROM_SIZE) < 0)
+        || (SMW_BA(m, rambanks, PARTNER_RAM_SIZE) < 0)) {
+        snapshot_module_close(m);
+        return -1;
+    }
 
     return snapshot_module_close(m);
 }
@@ -397,6 +414,15 @@ int partner128_snapshot_read_module(snapshot_t *s)
     }
 
     /* FIXME */
+    if (0
+        || SMR_B(m, &regvalue) < 0
+        || SMR_B(m, &rambank) < 0
+        || SMR_B(m, &isdefreezing) < 0
+        || (SMR_BA(m, nmivector, 2) < 0)
+        || (SMR_BA(m, ext_function_rom, PARTNER_ROM_SIZE) < 0)
+        || (SMR_BA(m, rambanks, PARTNER_RAM_SIZE) < 0)) {
+        goto fail;
+    }
 
     snapshot_module_close(m);
 

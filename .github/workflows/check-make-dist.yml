@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: Checkout Source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Source Dependencies
         shell: bash
@@ -76,7 +76,7 @@ jobs:
           echo "artifact_name=$(basename -s .tar.gz vice-*.tar.gz)-${{ matrix.source.name }}.tar.gz" >> $GITHUB_OUTPUT
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         # This makes sure we only upload artifacts for the different configure
         # options used when creating the tarballs, not every combination of
         # source and target:
@@ -126,8 +126,7 @@ jobs:
         if: ${{ failure() }}
         shell: bash
         run: |
-          ./vice/build/github-actions/irc-message.sh "make dist => make failed for ${{ matrix.source.name }} => ${{ matrix.target.name }}"
-
+          ./vice/build/github-actions/irc-message.sh "make dist => make failed for ${{ matrix.source.name }} => ${{ matrix.target.name }}. See $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
   diff_dists:
     name: Check dist tarballs for content differences
@@ -138,10 +137,10 @@ jobs:
 
     steps:
       - name: Checkout Source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download Dist Tarballs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
           # we don't specify an artifact name or download path so we download
           # all artifacts to the current working directory
 
@@ -155,4 +154,4 @@ jobs:
         if: ${{ failure() }}
         shell: bash
         run: |
-          ./vice/build/github-actions/irc-message.sh "Dist tarballs do not match. See log of 'Weekly Check Dist' github action."
+          ./vice/build/github-actions/irc-message.sh "Dist tarballs do not match. See $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

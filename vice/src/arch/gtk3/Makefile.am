@@ -39,6 +39,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/monitor \
 	-I$(top_srcdir)/src/tapeport \
 	-I$(top_srcdir)/src/core/rtc \
+	-I$(top_srcdir)/src/tape \
 	-I$(top_srcdir)/src/hvsc
 
 AM_CFLAGS = @VICE_CFLAGS@
@@ -209,5 +210,4 @@ EXTRA_DIST = \
 	vice-launcher.sh \
 	videoarch.h \
 	vsidstate.h \
-	winjoy.h \
-	x11-launcher.sh
+	winjoy.h

@@ -102,7 +102,9 @@ struct vdc_s {
     unsigned int first_displayed_line;
     unsigned int last_displayed_line;
     unsigned int border_height;
-    unsigned int border_width;
+    unsigned int v0xscroll;
+    unsigned int iborder_width; /* internal */
+    unsigned int border_width;  /* including v0 xscroll */
     unsigned int raster_ycounter_max;
     unsigned int screen_textlines;
 
@@ -132,7 +134,7 @@ struct vdc_s {
     unsigned int mem_counter;
     unsigned int bitmap_counter;
 
-    /* Bytes per character.  */
+    /* Bytes per character, either 16 or 32 */
     unsigned int bytes_per_char;
 
     /* Character width - width of each character on screen in physical pixels */
@@ -173,7 +175,7 @@ struct vdc_s {
     /* The screen geometry has changed.  */
     int update_geometry;
 
-    /* 0..7 pixel x shift.  */
+    /* 0..7 pixel x shift. FIXME - should be 0..15! */
     unsigned int xsmooth;
 
     /* VDC Revision.  */
@@ -202,6 +204,9 @@ struct vdc_s {
 
     /* Row counter_y counts individual raster lines of the current row to know if we are at the end of the current row. */
     unsigned int row_counter_y;
+
+    /* Row counter latch is set if the previous raster line was the last of its character row */
+    unsigned int row_counter_latch;
 
     /* offset into the attribute memory - used for emulating the 8x1 attribute VDC quirk */
     unsigned int attribute_offset;
@@ -232,6 +237,15 @@ struct vdc_s {
 
     /* Raster line counter used by drawing code as above. */
     unsigned int draw_counter_y;
+
+    /* Draw counter latch is set if the previous raster line was the last of its character row */
+    unsigned int draw_counter_latch;
+
+    /* Flag as to whether we are in the vertical fine adjust area or not where things work different */
+    unsigned int vert_fine_adj;
+
+    /* Count of frames since the last change of geometry - used to resize the window only after multiple frames of stable geometry, otherwise the window goes crazy */
+    unsigned int stable_size_count;
 
     /* used to monitor for changes in screen and/or attribute addresses, as the cache can't cope with that */
     unsigned int old_screen_adr, old_attribute_adr;

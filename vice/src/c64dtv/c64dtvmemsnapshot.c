@@ -51,12 +51,24 @@
 #include "c64dtvmemsnapshot.h"
 #include "hummeradc.h"
 
+
+/* C64DTVROM 0.1 snapshot module format:
+
+   type  | name                 | description
+   ------------------------------------------
+   ARRAY | c64dtvflash_mem      | 0x200000
+   BYTE  | c64dtvflash_state    |
+   ARRAY | c64dtvflash_mem_lock | 39
+
+   NOTE: renamed from "C64ROM" to "C64DTVROM" in 0.1
+*/
+
 #define SNAP_ROM_MAJOR 0
-#define SNAP_ROM_MINOR 0
+#define SNAP_ROM_MINOR 1
 
 static log_t c64_snapshot_log = LOG_DEFAULT;
 
-static const char snap_rom_module_name[] = "C64ROM";
+static const char snap_rom_module_name[] = "C64DTVROM";
 
 #define NUM_TRAP_DEVICES 9  /* FIXME: is there a better constant ? */
 static int trapfl[NUM_TRAP_DEVICES];
@@ -66,7 +78,7 @@ static void get_trapflags(void)
 {
     int i;
     for(i = 0; trapdevices[i] != -1; i++) {
-        resources_get_int_sprintf("VirtualDevice%d", &trapfl[i], trapdevices[i]);
+        resources_get_int_sprintf("TrapDevice%d", &trapfl[i], trapdevices[i]);
     }
 }
 
@@ -74,7 +86,7 @@ static void clear_trapflags(void)
 {
     int i;
     for(i = 0; trapdevices[i] != -1; i++) {
-        resources_set_int_sprintf("VirtualDevice%d", 0, trapdevices[i]);
+        resources_set_int_sprintf("TrapDevice%d", 0, trapdevices[i]);
     }
 }
 
@@ -82,7 +94,7 @@ static void restore_trapflags(void)
 {
     int i;
     for(i = 0; trapdevices[i] != -1; i++) {
-        resources_set_int_sprintf("VirtualDevice%d", trapfl[i], trapdevices[i]);
+        resources_set_int_sprintf("TrapDevice%d", trapfl[i], trapdevices[i]);
     }
 }
 
@@ -178,10 +190,27 @@ fail:
     return -1;
 }
 
+/* C64DTVMEM 0.1 snapshot module format:
+
+   type  | name                     | description
+   -----------------------------------------------
+   BYTE  | pport.data               |
+   BYTE  | pport.dir                |
+   ARRAY | mem_ram                  | 0x200000
+   BYTE  | c64dtvmem_memmapper[0]   |
+   BYTE  | c64dtvmem_memmapper[1]   |
+   BYTE  | pport.data_out           |
+   BYTE  | pport.data_read          |
+   BYTE  | pport.dir_read           |
+
+   followed by ROM modules
+
+   NOTE: renamed from "C64MEM" to "C64DTVMEM" in 0.1
+*/
 
 #define SNAP_MAJOR 0
-#define SNAP_MINOR 0
-static const char snap_mem_module_name[] = "C64MEM";
+#define SNAP_MINOR 1
+static const char snap_mem_module_name[] = "C64DTVMEM";
 
 int c64dtv_snapshot_write_module(snapshot_t *s, int save_roms)
 {
@@ -276,82 +305,3 @@ fail:
     return -1;
 }
 
-#define SNAP_MAJOR 0
-#define SNAP_MINOR 0
-static const char snap_misc_module_name[] = "C64DTVMISC";
-
-int c64dtvmisc_snapshot_write_module(snapshot_t *s)
-{
-    snapshot_module_t *m;
-
-    /* Misc. module.  */
-    m = snapshot_module_create(s, snap_misc_module_name, SNAP_MAJOR, SNAP_MINOR);
-    if (m == NULL) {
-        return -1;
-    }
-
-    if (SMW_B(m, hummeradc_value) < 0
-        || SMW_B(m, hummeradc_channel) < 0
-        || SMW_B(m, hummeradc_control) < 0
-        || SMW_B(m, hummeradc_chanattr) < 0
-        || SMW_B(m, hummeradc_chanwakeup) < 0
-        || SMW_B(m, hummeradc_prev) < 0) {
-        goto fail;
-    }
-
-    if (snapshot_module_close(m) < 0) {
-        goto fail;
-    }
-    m = NULL;
-
-    return 0;
-
-fail:
-    if (m != NULL) {
-        snapshot_module_close(m);
-    }
-    return -1;
-}
-
-int c64dtvmisc_snapshot_read_module(snapshot_t *s)
-{
-    uint8_t major_version, minor_version;
-    snapshot_module_t *m;
-
-    /* Misc. module.  */
-    m = snapshot_module_open(s, snap_misc_module_name,
-                             &major_version, &minor_version);
-    if (m == NULL) {
-        return -1;
-    }
-
-    if (snapshot_version_is_bigger(major_version, minor_version, SNAP_MAJOR, SNAP_MINOR)) {
-        log_error(c64_snapshot_log,
-                  "Snapshot module version (%d.%d) newer than %d.%d.",
-                  major_version, minor_version,
-                  SNAP_MAJOR, SNAP_MINOR);
-        goto fail;
-    }
-
-    if (SMR_B(m, &hummeradc_value) < 0
-        || SMR_B(m, &hummeradc_channel) < 0
-        || SMR_B(m, &hummeradc_control) < 0
-        || SMR_B(m, &hummeradc_chanattr) < 0
-        || SMR_B(m, &hummeradc_chanwakeup) < 0
-        || SMR_B(m, &hummeradc_prev) < 0) {
-        goto fail;
-    }
-
-    if (snapshot_module_close(m) < 0) {
-        goto fail;
-    }
-    m = NULL;
-
-    return 0;
-
-fail:
-    if (m != NULL) {
-        snapshot_module_close(m);
-    }
-    return -1;
-}

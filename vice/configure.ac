@@ -10,7 +10,7 @@ dnl a development version. Don't add any strings to the version number (such
 dnl as '-dev' or 'beta'), the '-r$SVNREV' revision string is the only thing we
 dnl alllow after the version number.
 m4_define(vice_version_major, 3)
-m4_define(vice_version_minor, 9)
+m4_define(vice_version_minor, 10)
 m4_define(vice_version_build, 0)
 
 dnl Some people lose their shit if a version ends in .0
@@ -89,6 +89,7 @@ VICE_ARG_WITH_LIST(mpg123,                  [  --with-mpg123           use MPG12
 VICE_ARG_WITH_LIST(oss,                     [  --with-oss              use the OSS sound system])
 VICE_ARG_WITH_LIST(pulse,                   [  --without-pulse         do not use PulseAudio sound system])
 VICE_ARG_WITH_LIST(resid,                   [  --without-resid         do not use the reSID engine])
+VICE_ARG_WITH_LIST(residfp,                 [  --without-residfp       do not use the reSIDfp engine])
 VICE_ARG_WITH_LIST(sdlsound,                [  --with-sdlsound         use SDL sound system])
 VICE_ARG_WITH_LIST(sun,                     [  --without-sun           do not use the sun/netbsd sound system])
 VICE_ARG_WITH_LIST(vorbis,                  [  --with-vorbis           use Ogg/Vorbis support])
@@ -106,14 +107,12 @@ dnl Graphics options
 dnl
 VICE_ARG_WITH_LIST(gif,                     [  --with-gif              use GIF screenshot system])
 VICE_ARG_WITH_LIST(png,                     [  --without-png           do not use the PNG screenshot system])
-VICE_ARG_ENABLE_LIST(ffmpeg,                [  --enable-ffmpeg         enable FFmpeg support])
 dnl Only supported for SDL1
 VICE_ARG_ENABLE_LIST(hwscale,               [  --disable-hwscale       disables GPU scaling of emulated screen (SDL1 UI only)])
 
 dnl
 dnl Misc build options
 dnl
-VICE_ARG_WITH_LIST(zlib,                    [  --without-zlib          do not use the zlib support])
 VICE_ARG_WITH_LIST(unzip-bin,               [  --with-unzip-bin        enables distribution of unzip.exe in the windows bindist])
 VICE_ARG_WITH_LIST(libieee1284,             [  --with-libieee1284      use the libieee1284 parallel port library])
 VICE_ARG_ENABLE_LIST(arch,                  [  --enable-arch[[=arch]]  enable architecture specific compilation [[default=yes]]], [], [enable_arch=yes])
@@ -135,6 +134,7 @@ VICE_ARG_ENABLE_LIST(debug-threads,         [  --enable-debug-threads  enable de
 VICE_ARG_ENABLE_LIST(x64,                   [  --enable-x64            enable building of the old x64 emulator [[default=no]]])
 VICE_ARG_ENABLE_LIST(x64-image,             [  --enable-x64-image      enable X64 image support [[default=no]]])
 VICE_ARG_ENABLE_LIST(optimization,          [  --disable-optimization  disable code optimization by passing -O0 [[default=no]]])
+VICE_ARG_ENABLE_LIST(sanitizer,             [  --enable-sanitizer      enable address- and UB sanitizer [[default=no]]])
 VICE_ARG_ENABLE_LIST(extra-warnings,        [  --enable-extra-warnings enable anal warnings [[default=no]]])
 VICE_ARG_ENABLE_LIST(io-simulation,         [  --enable-io-simulation  enable i/o simulation devices [[default=no]]])
 VICE_ARG_ENABLE_LIST(experimental-devices,  [  --enable-experimental-devices    enable experimental device emulation [[default=no]]])
@@ -142,8 +142,8 @@ VICE_ARG_ENABLE_LIST(experimental-devices,  [  --enable-experimental-devices    
 dnl Needed for WIC64
 VICE_ARG_WITH_LIST(libcurl,                 [  --without-libcurl       disable libcurl support [[default=no]]])
 
-dnl Linux evdev joysticks
-VICE_ARG_WITH_LIST(evdev,                   [  --without-evdev         disable Linux evdev joystick driver [[default=no]]])
+dnl Needed for USBSID
+VICE_ARG_WITH_LIST(libusb,                  [  --without-libusb        disable libusb support [[default=no]]])
 
 dnl
 dnl UI options
@@ -175,6 +175,16 @@ if test x"$enable_optimization" = "xno"; then
   VICE_CFLAGS="-g -O0"
   VICE_CXXFLAGS="-g -O0"
   VICE_OBJCFLAGS="-g -O0"
+fi
+
+dnl
+dnl Check for enabling address- and UB sanitizer with --enable-sanitizer
+dnl
+if test x"$enable_sanitizer" = "xyes"; then
+  VICE_CFLAGS="-g -O0 -fno-common -fno-omit-frame-pointer -fsanitize=address,undefined -fsanitize-address-use-after-scope"
+  VICE_CXXFLAGS="-g -O0 -fno-common -fno-omit-frame-pointer -fsanitize=address,undefined -fsanitize-address-use-after-scope"
+  VICE_OBJCFLAGS="-g -O0 -fsanitize=address,undefined"
+  VICE_LDFLAGS="-fsanitize=address,undefined"
 fi
 
 
@@ -448,12 +458,10 @@ HAVE_CATWEASELMKIII_SUPPORT="no "
 HAVE_DINPUT_SUPPORT="no "
 HAVE_DYNLIB_SUPPORT_TOO="no "
 HAVE_FASTSID_SUPPORT="no "
-HAVE_FFMPEG_AVRESAMPLE_SUPPORT="no "
-HAVE_FFMPEG_SUPPORT="no "
-HAVE_FFMPEG_SWRESAMPLE_SUPPORT="no "
-HAVE_FFMPEG_SWSCALE_SUPPORT="no "
 HAVE_FONTCONFIG_SUPPORT="no "
 HAVE_GIF_SUPPORT="no "
+HAVE_LIBUSB_SUPPORT="no "
+HAVE_USBSID_SUPPORT="no "
 HAVE_HARDSID_SUPPORT="no "
 HAVE_HWSCALE_SUPPORT="no "
 HAVE_IOSID_SUPPORT="no "
@@ -470,6 +478,7 @@ HAVE_PORTSID_SUPPORT="no "
 HAVE_RAWNET_SUPPORT="no "
 HAVE_REALDEVICE_SUPPORT="no "
 HAVE_RESID_SUPPORT="no "
+HAVE_RESIDFP_SUPPORT="no "
 HAVE_RS232DEV_SUPPORT="no "
 HAVE_RS232NET_SUPPORT="no "
 HAVE_OPENMP_SUPPORT="no "
@@ -478,7 +487,6 @@ HAVE_SYS_AUDIOIO_H_SUPPORT="no "
 HAVE_SYS_AUDIO_H_SUPPORT="no "
 HAVE_ZLIB_SUPPORT="no "
 LINUX_JOYSTICK_SUPPORT="no "
-MAC_JOYSTICK_SUPPORT="no "
 USE_ALSA_SUPPORT="no "
 USE_COREAUDIO_SUPPORT="no "
 USE_DMEDIA_SUPPORT="no "
@@ -799,6 +807,44 @@ if test x"$is_win32" = "xyes" -o x"$is_win32_gtk3" = "xyes"; then
     AM_CONDITIONAL(HAVE_CATWEASELMKIII, true)
     HAVE_CATWEASELMKIII_SUPPORT="yes"
   fi
+
+  dnl check for usbsid required libraries and headers
+  if test x"$enable_usbsid" != "xno" ; then
+    PKG_PROG_PKG_CONFIG
+    WIN32_USBSID_HEADER_PRESENT=yes
+    AC_CHECK_HEADERS(libusb-1.0/libusb.h,,[WIN32_USBSID_HEADER_PRESENT=no],)
+    if test x"$WIN32_USBSID_HEADER_PRESENT" = "xyes"; then
+      AC_CHECK_LIB(usb-1.0, libusb_init,[LIBS="-lusb-1.0 $LIBS"; USBSID_LIB_PRESENT=yes],,)
+      if test x"$PKG_CONFIG" != "x" -a x"$USBSID_LIB_PRESENT" = "xyes"; then
+        PKG_CHECK_MODULES(LIBUSB, [libusb-1.0], HAVE_LIBUSB_SUPPORT="yes")
+        AC_MSG_CHECKING([for pkgconfig libusb-1.0])
+        if test x"$HAVE_LIBUSB_SUPPORT" = "xyes"; then
+          VICE_CFLAGS="$VICE_CFLAGS $LIBUSB_CFLAGS";
+          VICE_CPPFLAGS="$VICE_CPPFLAGS $LIBUSB_CFLAGS";
+          AC_MSG_RESULT([yes])
+        else
+          AC_MSG_RESULT([no])
+        fi
+      fi
+    fi
+  fi
+
+  dnl usbsid support
+  AM_CONDITIONAL(HAVE_USBSID, false)
+  AC_MSG_CHECKING([for USBSID-Pico support])
+  if test x"$enable_usbsid" != "xno" ; then
+    if test x"$HAVE_LIBUSB_SUPPORT" = "xyes"; then
+      AC_DEFINE([HAVE_USBSID],,[Support for USBSID])
+      HAVE_USBSID_SUPPORT="yes"
+      AM_CONDITIONAL(HAVE_USBSID, true)
+      AC_MSG_RESULT([yes])
+    else
+      AC_MSG_RESULT([no (LIBUSB not found)])
+    fi
+  else
+    AC_MSG_RESULT([no (USBSID-Pico disabled)])
+  fi
+
   if test x"$enable_hardsid" != "xno"; then
     AC_DEFINE(HAVE_HARDSID,,[Support for HardSID.])
     HAVE_HARDSID_SUPPORT="yes"
@@ -1199,10 +1245,6 @@ if test x"$check_gtk3" = "xyes"; then
     if test x"$enable_gtk3ui" = "xyes"; then
       AC_MSG_ERROR([GTK3 UI requested, but GTK3 support packages are missing])
     fi
-  fi
-  dnl error out if gtk3 support is requested but zlib is disabled
-  if test x"$enable_gtk3ui" = "xyes" -a x"$with_zlib" = "xno"; then
-    AC_MSG_ERROR([GTK3 UI requested, but zlib is explicitly disabled])
   fi
 
   dnl Used to compile the vice.gresource.xml file
@@ -1762,30 +1804,38 @@ dnl XDG .desktop files are only supported for the Gtk3 UI on Unix (excl. MacOS)
 dnl
 AM_CONDITIONAL(INSTALL_DESKTOP_FILES, false)
 if test x"$enable_desktop_files" = "xyes"; then
-    dnl Check Gtk3 UI
-    if test x"$enable_gtk3ui" != "xyes"; then
-        AC_MSG_ERROR([XDG desktop files requested but UI is not Gtk3.])
-    fi
-    dnl Check OS (Unix)
-    if test x"$is_unix_x11" != "xyes"; then
-        AC_MSG_ERROR([XDG desktop files requested but OS is not Unix.])
-    fi
-    dnl Check OS (not MacOS)
-    if test x"$is_unix_macos" = "xyes"; then
-        AC_MSG_ERROR([XDG desktop files requested but OS is MacOS.])
-    fi
-    dnl Check for xdg-desktop-menu
-    AC_CHECK_PROG(XDG_DESKTOP_MENU, xdg-desktop-menu, xdg-desktop-menu, no)
-    echo "$XDG_DESKTOP_MENU"
-    if test x"$XDG_DESKTOP_MENU" = "xno"; then
-        AC_MSG_ERROR([XDG desktop files requested but required tool xdg-desktop-menu is missing. Please install xgd-utils.])
-    fi
+  dnl Check Gtk3 UI
+  if test x"$enable_gtk3ui" != "xyes"; then
+    AC_MSG_ERROR([XDG desktop files requested but UI is not Gtk3.])
+  fi
+  dnl Check OS (Unix)
+  if test x"$is_unix_x11" != "xyes"; then
+    AC_MSG_ERROR([XDG desktop files requested but OS is not Unix.])
+  fi
+  dnl Check OS (not MacOS)
+  if test x"$is_unix_macos" = "xyes"; then
+    AC_MSG_ERROR([XDG desktop files requested but OS is MacOS.])
+  fi
+  dnl Check for desktop-file-install
+  AC_CHECK_PROG(DESKTOP_FILE_INSTALL, desktop-file-install, desktop_file_install, no)
+  if test x"$DESKTOP_FILE_INSTALL" = "xno"; then
+    AC_MSG_ERROR([XDG desktop files requested but required tool desktop-file-install is missing. Please install desktop-file-utils.])
+  fi
+  dnl Check for xdg-icon-resource
+  AC_CHECK_PROG(XDG_ICON_RESOURCE, xdg-icon-resource, xdg-icon-resource, no)
+  if test x"$XDG_ICON_RESOURCE" = "xno"; then
+    AC_MSG_ERROR([XDG desktop files requested but required tool xdg-icon-resource is missing. Please install xdg-utils.])
+  fi
+  dnl Check for update-desktop-database
+  AC_CHECK_PROG(UPDATE_DESKTOP_DATABASE, update-desktop-database, update-desktop-database, no)
+  if test x"$UPDATE_DESKTOP_DATABASE" = "xno"; then
+    AC_MSG_ERROR([XDG desktop files requested but required tool update-desktop-database is missing. Please install desktop-file-utils.])
+  fi
 
-    dnl We got the UI + OS + tools:
-    USE_DESKTOP_FILES="yes"
-    AM_CONDITIONAL(INSTALL_DESKTOP_FILES, true)
-    AC_SUBST([XDG_DESKTOP_MENU], ["$XDG_DESKTOP_MENU"])
-
+  dnl We got the UI + OS + tools:
+  USE_DESKTOP_FILES="yes"
+  AC_DEFINE(INSTALL_DESKTOP_FILES, , [Install XDG desktop files and icons])
+  AM_CONDITIONAL(INSTALL_DESKTOP_FILES, true)
 fi
 
 
@@ -1840,10 +1890,12 @@ dnl FastSID is disabled by default, so we check against "yes", ReSID is enabled
 dnl by default so we check against "no" ($with_resid being empty means the
 dnl default, ie "yes")
 dnl
+dnl FIXME: residfp?
+dnl
 dnl Remove this check to allow building without a SID engine
-if test x"$with_fastsid" != "xyes" -a x"$with_resid" = "xno"; then
-  AC_MSG_ERROR([Neither FastSID nor ReSID sound engine enabled, please enable at least one.])
-fi
+dnl if test x"$with_fastsid" != "xyes" -a x"$with_resid" = "xno"; then
+dnl   AC_MSG_ERROR([Neither FastSID nor ReSID sound engine enabled, please enable at least one.])
+dnl fi
 
 
 dnl FastSID
@@ -1957,6 +2009,89 @@ AC_SUBST(RESID_DTV_LIBS)
 AC_SUBST(RESID_DTV_INCLUDES)
 AC_SUBST(RESID_DTV_DEP)
 
+
+RESIDFP_DIR=
+RESIDFP_LIBS=
+RESIDFP_INCLUDES=
+RESIDFP_DEP=
+
+dnl Set linker to C++ compiler/linker: even SDL builds use C++ code (linenoise-ng)
+LINKCC='$(CXX)'
+
+dnl disable reSIDfp for certain platforms
+
+RESIDFPSUB=""
+
+if test x"$with_residfp" = "xno"; then
+  dnl Do not attempt to configure reSIDfp.
+  dnl NOTE: no_recursion is set because directories specified with
+  dnl AC_CONFIG_SUBDIRS are always recursed into regardless of where the
+  dnl macro is used.
+  dnl Another workaround must be found if other self-contained packages go
+  dnl into VICE.
+
+  dnl A workaround for an autoconf bug when not using/checking the C++
+  dnl compiler, we'll define am__fastdepCXX_TRUE as #
+  am__fastdepCXX_TRUE=#
+  am__fastdepCXX_FALSE=
+else
+  AC_LANG_SAVE
+  AC_LANG_CPLUSPLUS
+  AC_PROG_CXX([g++ clang++ cc])
+
+  dnl disable residfp when no C++ compiler is found
+  if test x"$CXX" != "x" ; then
+    LINKCC='$(CXX)'
+
+    dnl Set CXXFLAGS. Use -fno-exceptions for G++ if supported.
+    if test "$ac_test_CXXFLAGS" != set; then
+      if test "$GXX" = yes; then
+        old_CXXFLAGS=$CXXFLAGS
+        CXXFLAGS="$CXXFLAGS -fno-exceptions"
+        AC_MSG_CHECKING([whether the C++ compiler ($CXX $CXXFLAGS $LDFLAGS) works])
+        AC_TRY_COMPILE([],
+                       [ int test; ],
+                       [ AC_MSG_RESULT(yes) ],
+                       [ AC_MSG_RESULT(no)
+                         CXXFLAGS=$old_CXXFLAGS
+                         ])
+      fi
+    fi
+    AC_PROG_CXXCPP
+  fi
+
+  if test x"$with_residfp" = "xyes" -o x"$with_residfp" = "x"; then
+    AC_DEFINE(HAVE_RESIDFP,,[This version provides ReSIDfp support.])
+    HAVE_RESIDFP_SUPPORT="yes"
+    AX_SUBDIRS_CONFIGURE([src/lib/libresidfp], [[--disable-option-checking],[--disable-tests]])
+    RESIDFP_DIR=lib/libresidfp
+    RESIDFP_LIBS="\$(top_builddir)/src/lib/libresidfp/libresidfp.a"
+    RESIDFP_INCLUDES="-I\$(top_srcdir)/src/lib/libresidfp -I\$(top_builddir)/src/lib/libresidfp/src"
+    RESIDFP_DEP=libresidfp
+    RESIDFPSUB=lib/libresidfp
+  fi
+  AC_LANG_RESTORE
+fi
+
+AC_SUBST(RESIDFPSUB)
+
+if test x"$RESIDFPSUB" = "xlib/libresidfp"; then
+  AM_CONDITIONAL(RESIDFP_DIR_USED, true)
+else
+  AM_CONDITIONAL(RESIDFP_DIR_USED, false)
+fi
+
+AC_SUBST(LINKCC)
+
+AM_CONDITIONAL(HAVE_RESIDFP, test x"$with_residfp" != "xno")
+
+AC_SUBST(RESIDFP_DIR)
+AC_SUBST(RESIDFP_LIBS)
+AC_SUBST(RESIDFP_INCLUDES)
+AC_SUBST(RESIDFP_DEP)
+
+
+
 dnl Check for typedefs, structures, and compiler characteristics.
 AC_CHECK_HEADERS(sys/types.h)
 
@@ -2064,22 +2199,14 @@ dnl ----- Joystick support -----
 JOY_LIBS=
 AM_CONDITIONAL(HAVE_LINUX_EVDEV, false)
 if test x"$is_unix_x11" = "xyes" -a x"$enable_sdl1ui" != "xyes" -a x"$enable_sdl2ui" != "xyes" -a x"$enable_headlessui" != "xyes"; then
-  AC_CHECK_HEADER(linux/joystick.h,
-                  [
-                   AC_CHECK_DECL(JS_VERSION,[
-                       LINUX_JOYSTICK_SUPPORT="yes";
-                        AC_DEFINE(LINUX_JOYSTICK,,
-                              [Enable support for Linux style joysticks.])
-                        JOYSTICK_DRIVERS="$JOYSTICK_DRIVERS joystick_linux.o";
-                   ],[],[#include <linux/joystick.h>])],)
   dnl Linux evdev joystick driver
-  if test x"$with_evdev" != "xno" -a x"$is_unix_linux" = "xyes"; then
+  if test x"$is_unix_linux" = "xyes"; then
     PKG_CHECK_MODULES([libevdev],
                       [libevdev],
                       [AC_DEFINE(HAVE_LINUX_EVDEV,,[Enable support for Linux evdev joysticks.])
                        JOYSTICK_DRIVERS="$JOYSTICK_DRIVERS joystick_linux_evdev.o"
                        HAVE_LINUX_EVDEV_SUPPORT="yes"],
-                      [AC_MSG_ERROR([Linux evdev joystick driver requested (--with-evdev) but the libevdev headers are missing.])])
+                      [AC_MSG_ERROR([Please install libevdev headers.])])
     VICE_CFLAGS="$VICE_CFLAGS $libevdev_CFLAGS"
     VICE_CXXFLAGS="$VICE_CXXFLAGS $libevdev_CXXFLAGS"
     LIBS="$LIBS $libevdev_LIBS"
@@ -2143,9 +2270,7 @@ if test x"$is_unix_macosx" = "xyes" -a x"$enable_sdl1ui" != "xyes" -a x"$enable_
                   [IOHIDManagerCreate(NULL,0)],
                   [AC_MSG_RESULT(yes);
                    JOY_LIBS="-framework IOKit -framework CoreServices";
-                   MAC_JOYSTICK_SUPPORT="yes";
                    HAS_HIDMGR_SUPPORT="yes";
-                   AC_DEFINE(MAC_JOYSTICK,,[Enable Mac Joystick support.])
                    JOYSTICK_DRIVERS="$JOYSTICK_DRIVERS joystick_osx.o";
                    ],
                   [AC_MSG_RESULT(no);
@@ -2164,26 +2289,18 @@ AC_CHECK_LIB(m, sqrt,,,$LIBS)
 dnl ----- ZLib -----
 ZLIB_LIBS=
 
-if test x"$with_zlib" != "xno" ; then
-  AC_CHECK_HEADER(zlib.h,,)
-  if test x"$ac_cv_header_zlib_h" = "xyes" ; then
-    ac_cv_lib_z_zlibVersion=yes
-    AC_CHECK_LIB(z, zlibVersion,
+AC_CHECK_HEADER(zlib.h,,)
+if test x"$ac_cv_header_zlib_h" = "xyes" ; then
+  ac_cv_lib_z_zlibVersion=yes
+  AC_CHECK_LIB(z, zlibVersion,
                [ ZLIB_LIBS="-lz";
                  HAVE_ZLIB_SUPPORT="yes";
                  AC_DEFINE(HAVE_ZLIB,,
                  [Can we use the ZLIB compression library?]) ],,)
-  fi
-fi
-
-if test x"$HAVE_ZLIB_SUPPORT" = "xyes" ; then
-  AM_CONDITIONAL(HAVE_ZLIB, true)
 else
-  AM_CONDITIONAL(HAVE_ZLIB, false)
+  AC_MSG_ERROR([Zlib header not found, please install zlib.])
 fi
-
 AC_SUBST(ZLIB_LIBS)
-
 
 dnl --- Curl / WIC64 ---
 dnl We need at least version 7.77.1 for `CURLSSLOPT_NATIVE_CA`
@@ -2191,10 +2308,13 @@ dnl
 dnl 2023-11-18: check relaxed to accept any version, the wic64 code uses an
 dnl #ifdef to check for `CURLSSLOPT_NATIVE_CA` to see if the option can be
 dnl enabled. See https://sourceforge.net/p/vice-emu/bugs/1964/
+dnl
+dnl 2026-02-05: add check for >= 7.66.0 for `curl_multi_poll()
+dnl
 if test x"$with_libcurl" != "xno"; then
-  PKG_CHECK_MODULES(libcurl, [libcurl], [have_libcurl=yes], [have_libcurl=no])
+  PKG_CHECK_MODULES(libcurl, [libcurl >= 7.66.0], [have_libcurl=yes], [have_libcurl=no])
   if test x"$have_libcurl" = "xno"; then
-    AC_MSG_ERROR([libcurl support requested, but libcurl was not found.])
+    AC_MSG_ERROR([libcurl (>= 7.66.0) support requested, but libcurl was not found.])
   fi
   HAVE_LIBCURL_SUPPORT="yes"
   VICE_CFLAGS="$VICE_CFLAGS $libcurl_CFLAGS"
@@ -2390,121 +2510,6 @@ fi
 LIBS="$old_LIBS"
 AC_SUBST(NETPLAY_LIBS)
 
-dnl ----- FFMPEG -----
-FFMPEG_INCLUDES=
-
-HAVE_FFMPEG=no
-ffmpeg_use_header_subdirs=no
-
-AC_MSG_CHECKING([for FFMPEG support])
-
-dnl external ffmpeg
-if test x"$enable_ffmpeg" = "xyes"; then
-  PKG_PROG_PKG_CONFIG
-
-  valid_ffmpeg_platform="no"
-
-  if test x"$is_unix" = "xyes"; then
-    dnl --- unix (requires dynlib support) ---
-    if test x"$dynlib_support" = "xyes"; then
-      valid_ffmpeg_platform="yes"
-    fi
-  else
-    valid_ffmpeg_platform="yes"
-  fi
-
-  if test x"$valid_ffmpeg_platform" = "xyes"; then
-    AC_MSG_RESULT([via pkg-config])
-    PKG_CHECK_MODULES(FFMPEG_AV,  [libavcodec libavformat libavutil],
-      [old_CFLAGS=$CFLAGS
-       old_CPPFLAGS=$CPPFLAGS
-       CFLAGS="$CFLAGS $FFMPEG_AV_CFLAGS"
-       CPPFLAGS="$CPPFLAGS $FFMPEG_AV_CFLAGS"
-
-       AC_CHECK_HEADER(libavformat/avformat.h,
-        [AC_DEFINE([HAVE_FFMPEG_HEADER_SUBDIRS],,[FFMPEG uses subdirs for headers])
-         ffmpeg_use_header_subdirs="yes"],
-        [AC_CHECK_HEADER(avformat.h,,
-          [AC_MSG_ERROR([No suitable FFMPEG header found!])])])
-
-       CFLAGS=$old_CFLAGS
-       CPPFLAGS=$old_CPPFLAGS
-
-      PKG_CHECK_MODULES(FFMPEG_SWSCALE, [libswscale],
-        [have_swscale=yes],
-        [echo "no. trying img_convert"]
-        [old_LIBS=$LIBS]
-        [AC_CHECK_LIB(avcodec, img_convert,[have_imgconvert=yes])]
-        [LIBS=$old_LIBS]
-      )
-      if (test x"${have_swscale}" = x"yes") || (test x"${have_imgconvert}" = x"yes") ; then
-        AC_DEFINE([HAVE_FFMPEG],,[Have FFMPEG av* libs available])
-        HAVE_FFMPEG_SUPPORT="yes"
-        FFMPEG_INCLUDES="$FFMPEG_AV_CFLAGS"
-        GFXOUTPUT_DRIVERS="$GFXOUTPUT_DRIVERS ffmpegdrv.o ffmpeglib.o"
-        dlopen_pthread=yes
-      fi
-      if (test x"${have_swscale}" = x"yes") ; then
-        AC_DEFINE([HAVE_FFMPEG_SWSCALE],,[Have FFMPEG swscale lib available])
-        HAVE_FFMPEG_SWSCALE_SUPPORT="yes"
-        FFMPEG_INCLUDES="$FFMPEG_INCLUDES $FFMPEG_SWSCALE_CFLAGS"
-        dlopen_pthread=yes
-      fi
-       ],
-      [echo "no. disabled."]
-    )
-    AC_DEFINE([EXTERNAL_FFMPEG],,[External FFMPEG libraries are used])
-    HAVE_FFMPEG=yes
-    PKG_CHECK_MODULES(FFMPEG_SWRESAMPLE, [libswresample], [have_swresample=yes], [have_swresample=no])
-    if test x"$have_swresample" = "xyes"; then
-      AC_DEFINE([HAVE_FFMPEG_SWRESAMPLE],,[Have FFMPEG swresample lib available])
-      HAVE_FFMPEG_SWRESAMPLE_SUPPORT="yes"
-    else
-      # dnl libav is abandoned and support should be removed, but check for it if swresample is missing.
-      PKG_CHECK_MODULES(FFMPEG_AVRESAMPLE, [libavresample], [have_avresample=yes], [have_avresample=no])
-      if test x"$have_avresample" = "xyes"; then
-        AC_DEFINE([HAVE_FFMPEG_AVRESAMPLE],,[Have libav avresample lib available])
-        HAVE_FFMPEG_AVRESAMPLE_SUPPORT="yes"
-      else
-        AC_MSG_ERROR([No swresample or avresample library available!])
-      fi
-    fi
-  else
-    AC_MSG_RESULT([not available])
-  fi
-fi
-
-if test x"$HAVE_FFMPEG" = "xyes"; then
-
-  dnl
-  dnl After all that, is the version of ffmpeg compatible with our code.
-  dnl ffmpeg 4.x is, ffmpeg 5 is not.
-  dnl
-
-  ORIG_CFLAGS="$CFLAGS"
-  CFLAGS="$CFLAGS $FFMPEG_INCLUDES"
-
-  TEST_FFMPEG_C=" AVCodecContext *context_dropped_in_ffmpeg_5;
-                  "
-
-  if test x"$ffmpeg_use_header_subdirs" = "xyes"; then
-    AC_TRY_COMPILE([ #include "libavformat/avformat.h" ],
-                   [ $TEST_FFMPEG_C ],
-                   ,
-                   [ AC_MSG_ERROR([ffmpeg version is not compatible. Use 4.x]) ])
-  else
-    AC_TRY_COMPILE([ #include "avformat.h" ],
-                   [ $TEST_FFMPEG_C ],
-                   ,
-                   [ AC_MSG_ERROR([ffmpeg version is not compatible. Use 4.x])])
-  fi
-
-  CFLAGS=$ORIG_CFLAGS
-  AC_SUBST(FFMPEG_INCLUDES)
-else
-  AC_MSG_RESULT([disabled])
-fi
-
 dnl check for glibc 2.20+
 linux_glibc_220_and_up=yes
 AC_MSG_CHECKING(if we are using glibc-2.20 and up)
@@ -2569,7 +2574,7 @@ if test x"$enable_ethernet" = "xyes"; then
         AC_DEFINE(HAVE_PCAP,,[Support for PCAP library.])
         AC_DEFINE(HAVE_RAWNET,,[Support for CS8900A ethernet controller.])
         HAVE_RAWNET_SUPPORT="yes";
-        AC_DEFINE(VICE_USE_LIBNET_1_1,,[Support for The Final Ethernet])
+        AC_DEFINE(HAVE_LIBNET,,[Support for libnet library])
         TFE_LIBS="-lpcap `libnet-config --libs`"
         libnet_cflags="`libnet-config --defines`"
     ],,$LIBS)],,$LIBS)
@@ -2580,6 +2585,7 @@ if test x"$enable_ethernet" = "xyes"; then
         AC_DEFINE(HAVE_PCAP,,[Support for PCAP library.])
         AC_DEFINE(HAVE_RAWNET,,[Support for CS8900A ethernet controller.])
         HAVE_RAWNET_SUPPORT="yes";
+        AC_DEFINE(HAVE_LIBNET,,[Support for libnet library])
         TFE_LIBS="-lpcap `libnet-config --libs`"
         libnet_cflags="`libnet-config --defines`"
     ],,$LIBS)],,$LIBS)
@@ -2899,7 +2905,7 @@ fi
 AC_SUBST(SOUND_DRIVERS)
 AC_SUBST(SOUND_LIBS)
 
-dnl Check for ParSID/HardSID/CW support
+dnl Check for ParSID/USBSID/HardSID/CW support
 if test x"$is_unix" = "xyes"; then
 
   dnl Check cpu first
@@ -3052,6 +3058,44 @@ if test x"$is_unix" = "xyes"; then
     fi
 
   fi
+
+  dnl usbsid required libraries and headers
+  if test x"$with_libusb" != "xno" ; then
+    PKG_PROG_PKG_CONFIG
+    UNIX_USBSID_HEADER_PRESENT=yes
+    AC_CHECK_HEADERS(libusb-1.0/libusb.h,,[UNIX_USBSID_HEADER_PRESENT=no],)
+    if test x"$UNIX_USBSID_HEADER_PRESENT" = "xyes"; then
+      AC_CHECK_LIB(usb-1.0, libusb_init,[LIBS="-lusb-1.0 $LIBS"; USBSID_LIB_PRESENT=yes],,)
+      if test x"$PKG_CONFIG" != "x" -a x"$USBSID_LIB_PRESENT" = "xyes"; then
+        PKG_CHECK_MODULES(LIBUSB, [libusb-1.0], HAVE_LIBUSB_SUPPORT="yes")
+        AC_MSG_CHECKING([for pkgconfig libusb-1.0])
+        if test x"$HAVE_LIBUSB_SUPPORT" = "xyes"; then
+          VICE_CFLAGS="$VICE_CFLAGS $LIBUSB_CFLAGS";
+          VICE_CPPFLAGS="$VICE_CPPFLAGS $LIBUSB_CFLAGS";
+          AC_MSG_RESULT([yes])
+        else
+          AC_MSG_RESULT([no])
+        fi
+      fi
+    fi
+  fi
+
+  dnl usbsid support
+  AM_CONDITIONAL(HAVE_USBSID, false)
+  AC_MSG_CHECKING([for USBSID-Pico support])
+  if test x"$enable_usbsid" != "xno" ; then
+    if test x"$HAVE_LIBUSB_SUPPORT" = "xyes"; then
+      AC_DEFINE([HAVE_USBSID],,[Support for USBSID])
+      HAVE_USBSID_SUPPORT="yes"
+      AM_CONDITIONAL(HAVE_USBSID, true)
+      AC_MSG_RESULT([yes])
+    else
+      AC_MSG_RESULT([no (LIBUSB not found!!)])
+    fi
+  else
+    AC_MSG_RESULT([no (USBSID-Pico disabled)])
+  fi
+
 fi
 
 AC_TYPE_SIGNAL
@@ -3208,6 +3252,11 @@ if test x"$with_mpg123" = "xyes"; then
                      AC_DEFINE(USE_MPG123,,[Enable mpg123 mp3 decoding support.])],,)])
     if test x"$USE_MPG123_SUPPORT" != "xyes"; then
         AC_MSG_ERROR([MPG123 support requested but missing])
+    fi
+    if test x"$is_win32" = "xyes"; then
+        AC_DEFINE(HAVE_GLOB_H,,)
+    else
+        AC_CHECK_HEADERS(glob.h,,)
     fi
 fi
 
@@ -3520,6 +3569,7 @@ fi
 AC_OUTPUT([Makefile
            build/Makefile
            build/beos/Makefile
+           build/macOS/Makefile
            data/Makefile
            data/C128/Makefile
            data/C64/Makefile
@@ -3534,6 +3584,7 @@ AC_OUTPUT([Makefile
            data/common/Makefile
            data/GLSL/Makefile
            data/hotkeys/Makefile
+           data/joymaps/Makefile
            doc/Makefile
            doc/building/Makefile
            doc/html/Makefile
@@ -3547,7 +3598,6 @@ AC_OUTPUT([Makefile
            src/arch/gtk3/Makefile
            src/arch/gtk3/data/Makefile
            src/arch/gtk3/data/macos/Makefile
-           src/arch/gtk3/data/unix/Makefile
            src/arch/gtk3/data/win32/Makefile
            src/arch/gtk3/joystickdrv/Makefile
            src/arch/gtk3/novte/Makefile
@@ -3594,6 +3644,7 @@ AC_OUTPUT([Makefile
            src/lib/Makefile
            src/lib/p64/Makefile
            src/lib/linenoise-ng/Makefile
+           src/lib/libusbsiddrv/Makefile
            src/lib/libzmbv/Makefile
            src/lib/md5/Makefile
            src/monitor/Makefile
@@ -3724,6 +3775,7 @@ echo "SOUND"
 echo "-----"
 echo "FastSID support              : $HAVE_FASTSID_SUPPORT (--with/without-fastsid)"
 echo "ReSID support                : $HAVE_RESID_SUPPORT (--with/without-resid)"
+echo "ReSIDfp support              : $HAVE_RESIDFP_SUPPORT (--with/without-residfp)"
 echo "New 8580 filter support      : $USE_NEW_8580_FILTER (--enable/disable-new8580filter)"
 echo "PortAudio sound input support: $USE_PORTAUDIO_SUPPORT (--with/without-portaudio)"
 
@@ -3752,6 +3804,7 @@ fi
 
 if test x"$real_arch" = "xUnix" -o x"$real_arch" = "xOSX" -o x"$real_arch" = "xWin32"; then
     echo "MIDI support                 : $HAVE_MIDI_SUPPORT (--enable/disable-midi)"
+    echo "USBSID-Pico support          : $HAVE_USBSID_SUPPORT"
 fi
 
 if test x"$real_arch" != "xOSX" -a x"$real_arch" != "xBeOS"; then
@@ -3778,18 +3831,6 @@ echo "-----------"
 
 echo "GIF encoding support : $HAVE_GIF_SUPPORT (--with/without-gif)"
 echo "PNG encoding support : $HAVE_PNG_SUPPORT (--with/without-png)"
-
-echo ""
-echo "VIDEO RECORDING"
-echo "---------------"
-
-echo "FFMPEG support                : $HAVE_FFMPEG_SUPPORT (--enable-ffmpeg)"
-echo "FFMPEG swscale support        : $HAVE_FFMPEG_SWSCALE_SUPPORT"
-if test x"$have_swresample" = "xyes"; then
-  echo "Audio resampling library      : swresample"
-elif test x"$have_avresample" = "xyes"; then
-  echo "Audio resampling library      : avresample"
-fi
 
 echo ""
 echo "INPUT"
@@ -3844,7 +3885,7 @@ echo "-----"
 if test x"$real_arch" = "xUnix" -o x"$real_arch" = "xWin32"; then
   echo "Real device (OpenCBM support)    : $HAVE_REALDEVICE_SUPPORT (--enable/disable-realdevice)"
 fi
-echo "X64 image support                : $HAVE_X64_IMAGE_SUPPORT (--enable/disable--x64-image)"
+echo "X64 image support                : $HAVE_X64_IMAGE_SUPPORT (--enable/disable-x64-image)"
 
 dnl echo ""
 dnl echo "MONITOR"
@@ -3863,11 +3904,11 @@ if test x"$real_arch" = "xUnix"; then
     echo "POSIX 1003.1e capabilities support: $HAVE_CAPABILITIES_SUPPORT"
 fi
 
-echo "zlib support                      : $HAVE_ZLIB_SUPPORT (--with/without-zlib)"
-
-if test x"$real_arch" = "xUnix"; then
+if test x"$real_arch" = "xUnix" -o x"$real_arch" = "xWin32"; then
     echo "libieee1284 support               : $HAVE_LIBIEEE1284_SUPPORT (--with/--wihout-libieee1284)"
 fi
+
+echo "libusb support                    : $HAVE_LIBUSB_SUPPORT (--with/-without-libusb)"
 
 
 echo ""
@@ -3900,7 +3941,6 @@ echo "Build old x64 emulator        : $X64_INCLUDED (--enable/--disable-x64)"
 echo "Install XDG .desktop files    : $USE_DESKTOP_FILES"
 echo "icotool for Windows found     : $ICOTOOL"
 echo "Experimental devices emulation: $HAVE_EXPERIMENTAL_DEVICES_SUPPORT (--enable-experimental-devices)"
-echo "Linux evdev joystick driver   : $HAVE_LINUX_EVDEV_SUPPORT (--with-evdev)"
 
 echo ""
 echo "User CPPFLAGS:  $CPPFLAGS"

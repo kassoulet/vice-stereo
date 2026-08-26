@@ -37,6 +37,9 @@
 #include "c64mem.h"
 #include "c64-cmdline-options.h"
 #include "c64_256k.h"
+#ifdef HAVE_EXPERIMENTAL_DEVICES
+#include "c64_diag_586220_harness.h"
+#endif
 #include "cartridge.h"
 #include "cbmdos.h"
 #include "cia.h"
@@ -53,6 +56,7 @@
 #include "fileio.h"
 #include "fsdevice.h"
 #include "fsdevice-filename.h"
+#include "fsimage.h"
 #include "gfxoutput.h"
 #include "iecbus.h"
 #include "iecdrive.h"
@@ -67,6 +71,7 @@
 #include "sampler.h"
 #include "snapshot.h"
 #include "tap.h"
+#include "t64.h"
 #include "tape.h"
 #include "tapecart.h"
 #include "tapeport.h"
@@ -155,6 +160,11 @@ int drive_check_expansionA000(int type)
     return 0;
 }
 
+int drive_check_dolphindos3(int type)
+{
+    return 0;
+}
+
 int drive_check_profdos(int type)
 {
     return 0;
@@ -196,6 +206,11 @@ export_t export = { 0, 0, 0, 0 }; /* c64 export */
 static uint8_t mem_phi[0x1000];
 
 int cartridge_attach_image(int type, const char *filename)
+{
+    return -1;
+}
+
+int cartridge_attach_add_image(int type, const char *filename)
 {
     return -1;
 }
@@ -510,6 +525,11 @@ int tape_image_detach(unsigned int unit)
     return 0;
 }
 
+int tape_image_probe(const char *name)
+{
+    return 0;
+}
+
 void tape_image_detach_all(void)
 {
 }
@@ -584,6 +604,16 @@ const char *tape_get_file_name(int port)
 }
 
 int tapeport_valid_port(int port)
+{
+    return 0;
+}
+
+int t64_probe(const char *filename)
+{
+    return 0;
+}
+
+int tap_probe(const char *filename)
 {
     return 0;
 }
@@ -785,6 +815,11 @@ int disk_image_fsimage_create_dhd(const char *name, const char *dname, unsigned 
     return 0;
 }
 
+int fsimage_open_probe(disk_image_t *image)
+{
+    return 0;
+}
+
 int disk_image_write_sector(disk_image_t *image, const uint8_t *buf, const disk_addr_t *dadr)
 {
     return 0;
@@ -868,7 +903,7 @@ void machine_bus_status_drivetype_set(unsigned int unit, unsigned int enable)
 {
 }
 
-void machine_bus_status_virtualdevices_set(unsigned int unit, unsigned int enable)
+void machine_bus_status_trapdevices_set(unsigned int unit, unsigned int enable)
 {
 }
 
@@ -953,6 +988,14 @@ void drive_cpu_execute_all(CLOCK clk_value)
 {
 }
 
+void drive_catch_up_hook(CLOCK clk_value)
+{
+}
+
+void drive_cycle_hook(void)
+{
+}
+
 int drive_num_leds(unsigned int dnr)
 {
     return 1;
@@ -1034,8 +1077,13 @@ int vdrive_attach_image(disk_image_t *image, unsigned int unit, unsigned int dri
     return 0;
 }
 
-void vdrive_get_last_read(unsigned int *track, unsigned int *sector, uint8_t **buffer)
+void vdrive_get_last_read(vdrive_t *vdrive, unsigned int *track, unsigned int *sector, uint8_t **buffer, int num)
 {
+}
+
+int vdrive_get_last_read_ptr(void)
+{
+    return 0;
 }
 
 int vdrive_internal_create_format_disk_image(const char *filename, const char *diskname, unsigned int type)
@@ -1186,6 +1234,11 @@ const char *tapeport_get_device_type_desc(int type)
 }
 #endif
 
+uint8_t userport_io_sim_get_pbx_out_lines(void)
+{
+    return 0;
+}
+
 void userport_io_sim_set_pbx_out_lines(uint8_t val)
 {
 }
@@ -1277,6 +1330,25 @@ bool driver_select_has_graphics_output(const char *drv_name)
     return false;
 }
 
+/*******************************************************************************
+    DIAG harness
+*******************************************************************************/
+
+#ifdef HAVE_EXPERIMENTAL_DEVICES
+void c64_diag_586220_store_joyport_dig(uint8_t port, uint8_t val)
+{
+}
+
+uint8_t c64_diag_586220_read_joyport_dig(uint8_t port)
+{
+    return 0;
+}
+
+uint8_t c64_diag_586220_read_joyport_pot(void)
+{
+    return 0;
+}
+#endif
 
 /*******************************************************************************
     UI

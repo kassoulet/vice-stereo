@@ -1,4 +1,5 @@
-#! /bin/bash
+#!/bin/bash
+# NOTE: Sometimes run via $(SHELL), which may be a non-bash shell
 
 ###############################################################################
 # updatereadme.sh   - update VICE version / date in the README file
@@ -6,14 +7,25 @@
 
 #VERBOSE=1
 
-if sed -i 'p' $(mktemp) 2>/dev/null
+# GNU sed and BSD sed disagree about -i (suffix attached vs separate argument),
+# hence the wrapper function: in a plain string the quotes are stripped at
+# assignment and sed would use the '' as the backup suffix, leaving
+# "<file>''" droppings behind.
+#
+# Both branches use -E, because "\+" is a GNU-only BRE extension that BSD sed
+# would read as a literal '+' and silently substitute nothing. The patterns
+# are therefore ERE with a plain '+', and the greps sharing them need -E too,
+# where '(' and ')' must be escaped (literal in a BRE, group in an ERE).
+SEDTESTFILE=`mktemp`
+if sed -i 'p' "$SEDTESTFILE" 2>/dev/null
 then
     # GNU sed
-    SED_I="sed -i"
+    sed_i() { LC_ALL=C sed -E -i "$@"; }
 else
     # BSD sed
-    SED_I="sed -i ''"
+    sed_i() { LC_ALL=C sed -E -i '' "$@"; }
 fi
+rm -f "$SEDTESTFILE"
 
 README=README
 CONFIG=configure.ac
@@ -75,7 +87,7 @@ fi
 
 # The top line of README
 # "  VICE  3.6.2                                                        Jan 2022"
-TOPLINE=`grep " \+VICE \+[0-9]\+\.[0-9]\+[\.]*[0-9]* \+[A-Z][a-z][a-z] 20[0-9][0-9]" < $README`
+TOPLINE=`grep -E " +VICE +[0-9]+\.[0-9]+[\.]*[0-9]* +[A-Z][a-z][a-z] 20[0-9][0-9]" < $README`
 if [ "x$VERBOSE" = "x1" ]; then
 echo topline old: $TOPLINE
 fi
@@ -83,28 +95,25 @@ fi
 if [ "x$TOPLINE" = "x" ]; then
     echo "WARNING: top line of README not found, version/date NOT updated."
 else
-    TOPLINE="  VICE  "
-    TOPLINE+=$VMAJOR.$VMINOR
+    TOPLINE="  VICE  $VMAJOR.$VMINOR"
     if [ "$VBUILD" = "0" ]; then
-    TOPLINE+="  "
+    TOPLINE="$TOPLINE  "
     else
-    TOPLINE+=.$VBUILD
+    TOPLINE="$TOPLINE.$VBUILD"
     fi
-    TOPLINE+="                                                        "
-    TOPLINE+=$MONTH
-    TOPLINE+=" "
-    TOPLINE+=$YEAR
-    LC_ALL=C $SED_I -e "s: \+VICE \+[0-9]\+\.[0-9]\+[\.]*[0-9]* \+[A-Z][a-z][a-z] 20[0-9][0-9]:$TOPLINE:g" $README
+    TOPLINE="$TOPLINE                                                        "
+    TOPLINE="$TOPLINE$MONTH $YEAR"
+    sed_i -e "s: +VICE +[0-9]+\.[0-9]+[\.]*[0-9]* +[A-Z][a-z][a-z] 20[0-9][0-9]:$TOPLINE:g" $README
 fi
 
-TOPLINE=`grep " \+VICE \+[0-9]\+\.[0-9]\+[\.]*[0-9]* \+[A-Z][a-z][a-z] 20[0-9][0-9]" < $README`
+TOPLINE=`grep -E " +VICE +[0-9]+\.[0-9]+[\.]*[0-9]* +[A-Z][a-z][a-z] 20[0-9][0-9]" < $README`
 if [ "x$VERBOSE" = "x1" ]; then
 echo topline new: $TOPLINE
 fi
 
 # In the second paragraph of the README ("This is version 3.6 of VICE")
 
-LINE=`grep "This is version [0-9]\+\.[0-9]\+[\.]*[0-9]* \+of VICE" < $README`
+LINE=`grep -E "This is version [0-9]+\.[0-9]+[\.]*[0-9]* +of VICE" < $README`
 if [ "x$VERBOSE" = "x1" ]; then
 echo line old: $LINE
 fi
@@ -112,19 +121,15 @@ fi
 if [ "x$LINE" = "x" ]; then
     echo "WARNING: second patch line of README not found, version NOT updated."
 else
-    LINE="This is version "
-    LINE+=$VMAJOR.$VMINOR
-    if [ "$VBUILD" = "0" ]; then
-    LINE+=" "
-    else
-    LINE+=.$VBUILD
-    LINE+=" "
+    LINE="This is version $VMAJOR.$VMINOR"
+    if [ "$VBUILD" != "0" ]; then
+        LINE="$LINE.$VBUILD"
     fi
-    LINE+="of VICE"
-    LC_ALL=C $SED_I -e "s:This is version [0-9]\+\.[0-9]\+[\.]*[0-9]* \+of VICE:$LINE:g" $README
+    LINE="$LINE of VICE"
+    sed_i -e "s:This is version [0-9]+\.[0-9]+[\.]*[0-9]* +of VICE:$LINE:g" $README
 fi
 
-LINE=`grep "This is version [0-9]\+\.[0-9]\+[\.]*[0-9]* \+of VICE" < $README`
+LINE=`grep -E "This is version [0-9]+\.[0-9]+[\.]*[0-9]* +of VICE" < $README`
 if [ "x$VERBOSE" = "x1" ]; then
 echo line new: $LINE
 fi

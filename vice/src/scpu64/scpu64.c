@@ -133,6 +133,7 @@
 #include "userport_synergy_joystick.h"
 #include "userport_wic64.h"
 #include "userport_woj_joystick.h"
+#include "userport_funmp3.h"
 #include "vice-event.h"
 #include "vicii.h"
 #include "vicii-mem.h"
@@ -832,7 +833,7 @@ int machine_specific_init(void)
     disk_image_init();
 
     /* Initialize autostart.  */
-    autostart_init(3, 1);
+    autostart_init(3);
 
     /* Pre-init C64-specific parts of the menus before vicii_init()
        creates a canvas window with a menubar at the top. */
@@ -866,6 +867,9 @@ int machine_specific_init(void)
 
     /* Initialize userport based sound chips */
     userport_dac_sound_chip_init();
+#if defined(USE_MPG123) && defined (HAVE_GLOB_H)
+    userport_funmp3_sound_chip_init();
+#endif
 
     drive_sound_init();
     video_sound_init();

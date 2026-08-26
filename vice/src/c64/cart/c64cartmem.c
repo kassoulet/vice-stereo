@@ -33,6 +33,7 @@
 
 #include "c64cart.h"
 #include "c64mem.h"
+#include "c64model.h"
 #include "c64cartmem.h"
 #define CARTRIDGE_INCLUDE_SLOTMAIN_API
 #include "c64cartsystem.h"
@@ -98,6 +99,7 @@
 #include "magicformel.h"
 #include "magicvoice.h"
 #include "maxbasic.h"
+#include "megabyter.h"
 #include "mikroass.h"
 #include "mmc64.h"
 #include "mmcreplay.h"
@@ -106,6 +108,7 @@
 #include "pagefox.h"
 #include "partner64.h"
 #include "prophet64.h"
+#include "profidos.h"
 #include "ramcart.h"
 #include "ramlink.h"
 #include "retroreplay.h"
@@ -655,6 +658,8 @@ static uint8_t roml_read_slotmain(uint16_t addr)
             return ltkernal_roml_read(addr);
         case CARTRIDGE_MAX_BASIC:
             return maxbasic_roml_read(addr);
+        case CARTRIDGE_MEGABYTER:
+            return megabyter_roml_read(addr);
         case CARTRIDGE_MMC_REPLAY:
             return mmcreplay_roml_read(addr);
         case CARTRIDGE_MULTIMAX:
@@ -695,6 +700,7 @@ static uint8_t roml_read_slotmain(uint16_t addr)
         case CARTRIDGE_FORMEL64:
         case CARTRIDGE_GAME_KILLER:
         case CARTRIDGE_MAGIC_FORMEL: /* ? */
+        case CARTRIDGE_PROFIDOS:
             /* fake ultimax hack */
             return mem_read_without_ultimax(addr);
         case CARTRIDGE_ACTION_REPLAY4:
@@ -828,6 +834,9 @@ void roml_store(uint16_t addr, uint8_t value)
         case CARTRIDGE_LT_KERNAL:
             ltkernal_roml_store(addr, value);
             return;
+        case CARTRIDGE_MEGABYTER:
+            megabyter_roml_store(addr, value);
+            return;
         case CARTRIDGE_MMC_REPLAY:
             mmcreplay_roml_store(addr, value);
             return;
@@ -859,6 +868,7 @@ void roml_store(uint16_t addr, uint8_t value)
         case CARTRIDGE_GMOD3:
         case CARTRIDGE_STARDOS:
         case CARTRIDGE_MAGIC_FORMEL: /* ? */
+        case CARTRIDGE_PROFIDOS:
             /* fake ultimax hack */
             mem_store_without_ultimax(addr, value);
             return;
@@ -945,6 +955,7 @@ static uint8_t romh_read_slotmain(uint16_t addr)
         case CARTRIDGE_EXOS:
         case CARTRIDGE_GMOD2:
         case CARTRIDGE_STARDOS:
+        case CARTRIDGE_PROFIDOS:
             /* fake ultimax hack, read from ram */
             return ram_read(addr);
         case CARTRIDGE_GMOD3:
@@ -1072,6 +1083,8 @@ static uint8_t ultimax_romh_read_hirom_slotmain(uint16_t addr)
             return ocean_romh_read(addr);
         case CARTRIDGE_PARTNER64:
             return partner64_romh_read(addr);
+        case CARTRIDGE_PROFIDOS:
+            return profidos_romh_read_hirom(addr);
         case CARTRIDGE_RETRO_REPLAY:
             return retroreplay_romh_read(addr);
         case CARTRIDGE_UC1:
@@ -1206,6 +1219,7 @@ void romh_store(uint16_t addr, uint8_t value)
         case CARTRIDGE_GMOD3:
         case CARTRIDGE_IEEEFLASH64:
         case CARTRIDGE_MAGIC_FORMEL: /* ? */
+        case CARTRIDGE_PROFIDOS:
         case CARTRIDGE_STARDOS:
         case CARTRIDGE_SNAPSHOT64: /* ? */
             /* fake ultimax hack, c64 ram */
@@ -1507,6 +1521,7 @@ static uint8_t ultimax_1000_7fff_read_slot1(uint16_t addr)
         case CARTRIDGE_KINGSOFT:
         case CARTRIDGE_LT_KERNAL:
         case CARTRIDGE_MAGIC_FORMEL:
+        case CARTRIDGE_PROFIDOS:
         case CARTRIDGE_STARDOS:
             /* fake ultimax hack, c64 ram */
             return mem_read_without_ultimax(addr);
@@ -1601,6 +1616,7 @@ void ultimax_1000_7fff_store(uint16_t addr, uint8_t value)
         case CARTRIDGE_LT_KERNAL:
         case CARTRIDGE_MAGIC_FORMEL:
         case CARTRIDGE_PARTNER64:
+        case CARTRIDGE_PROFIDOS:
         case CARTRIDGE_STARDOS:
             /* fake ultimax hack, c64 ram */
             mem_store_without_ultimax(addr, value);
@@ -1656,6 +1672,7 @@ static uint8_t ultimax_a000_bfff_read_slot1(uint16_t addr)
         case CARTRIDGE_GMOD3:
         case CARTRIDGE_LT_KERNAL:
         case CARTRIDGE_MAGIC_FORMEL:
+        case CARTRIDGE_PROFIDOS:
         case CARTRIDGE_STARDOS:
             /* fake ultimax hack, c64 basic, ram */
             return mem_read_without_ultimax(addr);
@@ -1762,6 +1779,7 @@ void ultimax_a000_bfff_store(uint16_t addr, uint8_t value)
         case CARTRIDGE_GMOD3:
         case CARTRIDGE_LT_KERNAL:
         case CARTRIDGE_MAGIC_FORMEL:
+        case CARTRIDGE_PROFIDOS:
         case CARTRIDGE_STARDOS:
             /* fake ultimax hack, c64 ram */
             mem_store_without_ultimax(addr, value);
@@ -1808,6 +1826,7 @@ static uint8_t ultimax_c000_cfff_read_slot1(uint16_t addr)
         case CARTRIDGE_KINGSOFT:
         case CARTRIDGE_LT_KERNAL:
         case CARTRIDGE_MAGIC_FORMEL:
+        case CARTRIDGE_PROFIDOS:
         case CARTRIDGE_STARDOS:
             /* fake ultimax hack, c64 ram */
             return mem_read_without_ultimax(addr);
@@ -1886,6 +1905,7 @@ void ultimax_c000_cfff_store(uint16_t addr, uint8_t value)
         case CARTRIDGE_LT_KERNAL:
         case CARTRIDGE_MAGIC_FORMEL:
         case CARTRIDGE_PARTNER64:
+        case CARTRIDGE_PROFIDOS:
         case CARTRIDGE_STARDOS:
             /* fake ultimax hack, c64 ram */
             mem_store_without_ultimax(addr, value);
@@ -1923,6 +1943,7 @@ static uint8_t ultimax_d000_dfff_read_slot1(uint16_t addr)
         case CARTRIDGE_KINGSOFT:
         case CARTRIDGE_LT_KERNAL:
         case CARTRIDGE_MAGIC_FORMEL:
+        case CARTRIDGE_PROFIDOS:
         case CARTRIDGE_SNAPSHOT64: /* ? */
         case CARTRIDGE_STARDOS:
             /* fake ultimax hack, c64 io,colram,ram */
@@ -1997,6 +2018,7 @@ void ultimax_d000_dfff_store(uint16_t addr, uint8_t value)
         case CARTRIDGE_KINGSOFT:
         case CARTRIDGE_LT_KERNAL:
         case CARTRIDGE_MAGIC_FORMEL:
+        case CARTRIDGE_PROFIDOS:
         case CARTRIDGE_SNAPSHOT64: /* ? */
         case CARTRIDGE_STARDOS:
             /* fake ultimax hack, c64 io,colram,ram */
@@ -2020,13 +2042,64 @@ void ultimax_d000_dfff_store(uint16_t addr, uint8_t value)
 /*
     VIC-II reads from cart memory
 
-    most carts can simply wrap to ultimax_romh_read_hirom here, only
-    those that handle the vic accesses differently than cpu accesses
-    must provide their own functions.
+    NOTE: the called functions have to decode the address
 
     FIXME: lots of testing needed!
 */
 
+extern int board_type;
+
+/* VICII phi1 RAM $0800-$0fff (?) */
+int ultimax_ram_phi1_read(uint16_t addr, uint8_t *value)
+{
+    if (board_type != BOARD_MAX) {
+        return 0;
+    }
+
+    switch (mem_cartridge_type) {
+        case CARTRIDGE_ULTIMAX:
+            /* fall through */
+        default:
+            break;
+        case CARTRIDGE_MAX_BASIC:
+            /* fall through */
+        case CARTRIDGE_MULTIMAX:
+            *value = ultimax_0800_0fff_read(addr);
+            return 1;
+    }
+
+    return 0;
+}
+
+/* VICII phi2 RAM $0800-$0fff (?) */
+int ultimax_ram_phi2_read(uint16_t addr, uint8_t *value)
+{
+    if (board_type != BOARD_MAX) {
+        return 0;
+    }
+
+    switch (mem_cartridge_type) {
+        case CARTRIDGE_ULTIMAX:
+            /* fall through */
+        default:
+            break;
+        case CARTRIDGE_MAX_BASIC:
+            /* fall through */
+        case CARTRIDGE_MULTIMAX:
+            *value = ultimax_0800_0fff_read(addr);
+            return 1;
+    }
+
+    return 0;
+}
+
+/*
+    most carts can simply wrap to ultimax_romh_read_hirom here, only
+    those that handle the vic accesses differently than cpu accesses
+    must provide their own functions.
+*/
+
+/* VICII phi1 ROMH $3000-$3fff */
 static int ultimax_romh_phi1_read_slotmain(uint16_t addr, uint8_t *value)
 {
     int res = CART_READ_THROUGH;
@@ -2055,6 +2128,9 @@ static int ultimax_romh_phi1_read_slotmain(uint16_t addr, uint8_t *value)
             break;
         case CARTRIDGE_MMC_REPLAY:
             res = mmcreplay_romh_phi1_read(addr, value);
+            break;
+        case CARTRIDGE_PROFIDOS:
+            res = profidos_romh_phi1_read(addr, value);
             break;
         case CARTRIDGE_STARDOS:
             res = stardos_romh_phi1_read(addr, value);
@@ -2089,6 +2165,7 @@ static int ultimax_romh_phi1_read_slotmain(uint16_t addr, uint8_t *value)
     return 1;
 }
 
+/* VICII phi1 ROMH $3000-$3fff */
 static int ultimax_romh_phi1_read_slot1(uint16_t addr, uint8_t *value)
 {
     int res = CART_READ_THROUGH;
@@ -2117,6 +2194,7 @@ static int ultimax_romh_phi1_read_slot1(uint16_t addr, uint8_t *value)
     return ultimax_romh_phi1_read_slotmain(addr, value);
 }
 
+/* VICII phi1 ROMH $3000-$3fff */
 int ultimax_romh_phi1_read(uint16_t addr, uint8_t *value)
 {
     int res = CART_READ_THROUGH;
@@ -2150,6 +2228,7 @@ int ultimax_romh_phi1_read(uint16_t addr, uint8_t *value)
     return ultimax_romh_phi1_read_slot1(addr, value);
 }
 
+/* VICII phi2 ROMH $3000-$3fff */
 static int ultimax_romh_phi2_read_slotmain(uint16_t addr, uint8_t *value)
 {
     int res = CART_READ_THROUGH;
@@ -2178,6 +2257,9 @@ static int ultimax_romh_phi2_read_slotmain(uint16_t addr, uint8_t *value)
             break;
         case CARTRIDGE_MMC_REPLAY:
             res = mmcreplay_romh_phi2_read(addr, value);
+            break;
+        case CARTRIDGE_PROFIDOS:
+            res = profidos_romh_phi2_read(addr, value);
             break;
         case CARTRIDGE_STARDOS:
             res = stardos_romh_phi2_read(addr, value);
@@ -2410,6 +2492,9 @@ static uint8_t cartridge_peek_mem_slotmain(uint16_t addr)
             break;
         case CARTRIDGE_MAGIC_FORMEL:
             res = magicformel_peek_mem(&export_slotmain, addr, &value);
+            break;
+        case CARTRIDGE_PROFIDOS:
+            res = profidos_peek_mem(&export_slotmain, addr, &value);
             break;
         case CARTRIDGE_RETRO_REPLAY:
             res = retroreplay_peek_mem(&export_slotmain, addr, &value);

@@ -105,7 +105,9 @@ static Uint32 rmask = 0, gmask = 0, bmask = 0, amask = 0;
 static int texformat = 0;
 static int recreate_textures = 0;
 
-uint8_t *draw_buffer_vsid = NULL;
+/* KLUDGES: pointer to remember draw buffer for VSID */
+void *draw_buffer_vsid = NULL;
+
 /* ------------------------------------------------------------------------- */
 /* Video-related resources.  */
 
@@ -536,10 +538,14 @@ int video_init(void)
 
 void video_shutdown(void)
 {
+    struct draw_buffer_s *draw_buffer = (struct draw_buffer_s*)draw_buffer_vsid;
+
     DBG(("%s", __func__));
 
-    if (draw_buffer_vsid) {
-        lib_free(draw_buffer_vsid);
+    if (draw_buffer) {
+        lib_free(draw_buffer->draw_buffer);
+        lib_free(draw_buffer);
+        draw_buffer_vsid = NULL;
     }
 
     sdl_active_canvas = NULL;
@@ -556,25 +562,32 @@ static SDL_WindowFlags sdl2_ui_generate_flags_for_canvas(const video_canvas_t* c
 {
     SDL_WindowFlags flags = 0;
     int minimized = 0;
+    int maximized = 0;
     int hide_vdc = 0;
 
     if (machine_class == VICE_MACHINE_C128) {
         resources_get_int("C128HideVDC", &hide_vdc);
     }
     resources_get_int("StartMinimized", &minimized);
+    resources_get_int("StartMaximized", &maximized);
 
-    if (minimized) {
-      flags |= SDL_WINDOW_MINIMIZED;
+    if (minimized && maximized) {
+        log_warning(LOG_DEFAULT,
+                    "both StartMinized and StartMaximized are true, ignoring.");
+    } else if (minimized) {
+        flags |= SDL_WINDOW_MINIMIZED;
+    } else if (maximized) {
+        flags |= SDL_WINDOW_MAXIMIZED;
     }
 
     if (hide_vdc && (canvas->index == VIDEO_CANVAS_IDX_VDC)) {
-      flags |= SDL_WINDOW_HIDDEN;
+        flags |= SDL_WINDOW_HIDDEN;
     }
 
     if (canvas->fullscreenconfig->enable) {
-      flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+        flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
     } else {
-      flags |= SDL_WINDOW_RESIZABLE;
+        flags |= SDL_WINDOW_RESIZABLE;
     }
 
     return flags;
@@ -723,6 +736,14 @@ static video_container_t* sdl_container_create(int canvas_idx)
         container->renderer = SDL_CreateRenderer(container->window,
                                                 drv_index,
                                                 SDL_RENDERER_ACCELERATED);
+    }
+
+    if (!container->renderer && drv_index == -1) {
+        log_warning(sdlvideo_log, "SDL_CreateRenderer() failed. Falling back to basic renderer: %s", SDL_GetError());
+        SDL_SetHintWithPriority(SDL_HINT_RENDER_VSYNC, "0", SDL_HINT_OVERRIDE);
+        container->renderer = SDL_CreateRenderer(container->window,
+                                                drv_index,
+                                                0);
     }
 
     if (!container->renderer) {
@@ -1231,12 +1252,15 @@ void video_canvas_destroy(struct video_canvas_s *canvas)
                     sdl_canvaslist[i ^ 1]->container = NULL;
                 }
             }
-            sdl_container_destroy(sdl_canvaslist[i]->container);
-            sdl_canvaslist[i]->container = NULL;
+            if (sdl_canvaslist[i]->container) {
+                sdl_container_destroy(sdl_canvaslist[i]->container);
+                sdl_canvaslist[i]->container = NULL;
+            }
 #endif
-
-            SDL_FreeSurface(sdl_canvaslist[i]->screen);
-            sdl_canvaslist[i]->screen = NULL;
+            if (sdl_canvaslist[i]->screen) {
+                SDL_FreeSurface(sdl_canvaslist[i]->screen);
+                sdl_canvaslist[i]->screen = NULL;
+            }
         }
     }
 

@@ -56,9 +56,11 @@
 #include "cbmdos.h"
 #include "diskconstants.h"
 #include "diskimage.h"
+#include "drive.h"
 #include "fsdevice.h"
 #include "lib.h"
 #include "log.h"
+#include "resources.h"
 #include "types.h"
 #include "vdrive-bam.h"
 #include "vdrive-command.h"
@@ -176,6 +178,7 @@ void vdrive_device_shutdown(vdrive_t *vdrive)
             p = &(vdrive->buffers[i]);
             vdrive_free_buffer(p);
             lib_free(p->buffer);
+            p->buffer = NULL;
         }
     }
 }
@@ -650,8 +653,8 @@ void vdrive_set_disk_geometry(vdrive_t *vdrive)
             vdrive->Bam_Sector = BAM_SECTOR_8050;
             vdrive->Header_Track = HDR_TRACK_8050;
             vdrive->Header_Sector = HDR_SECTOR_8050;
-            vdrive->bam_name = BAM_NAME_8050;
-            vdrive->bam_id = BAM_ID_8050;
+            vdrive->bam_name = HDR_NAME_8050;
+            vdrive->bam_id = HDR_ID_8050;
             vdrive->Dir_Track = DIR_TRACK_8050;
             vdrive->Dir_Sector = DIR_SECTOR_8050;
             break;
@@ -660,8 +663,8 @@ void vdrive_set_disk_geometry(vdrive_t *vdrive)
             vdrive->Bam_Sector = BAM_SECTOR_8250;
             vdrive->Header_Track = HDR_TRACK_8250;
             vdrive->Header_Sector = HDR_SECTOR_8250;
-            vdrive->bam_name = BAM_NAME_8250;
-            vdrive->bam_id = BAM_ID_8250;
+            vdrive->bam_name = HDR_NAME_8250;
+            vdrive->bam_id = HDR_ID_8250;
             vdrive->Dir_Track = DIR_TRACK_8250;
             vdrive->Dir_Sector = DIR_SECTOR_8250;
             break;
@@ -753,22 +756,85 @@ void vdrive_set_disk_geometry(vdrive_t *vdrive)
 
 /* ------------------------------------------------------------------------- */
 
-static unsigned int last_read_track, last_read_sector;
-static uint8_t last_read_buffer[256];
+/* FIXME: this needs to be per unit and drive */
+static int last_read_ptr = 1;
 
-void vdrive_get_last_read(unsigned int *track, unsigned int *sector, uint8_t **buffer)
+/* NOTE: since even the 1541 uses two buffers, we do the same here */
+static unsigned int last_read_track[2];
+static unsigned int last_read_sector[2];
+
+/* get the last (and second last) read buffer
+   - used by autostart to update the true drive emulation with the current state
+*/
+void vdrive_get_last_read(vdrive_t *vdrive, unsigned int *track, unsigned int *sector, uint8_t **buffer, int num)
 {
-    *track = last_read_track;
-    *sector = last_read_sector;
-    *buffer = last_read_buffer;
+    int devnr = vdrive->unit;
+    int type = DRIVE_TYPE_NONE;
+
+    *track = last_read_track[num];
+    *sector = last_read_sector[num];
+
+    if (devnr > 7) {
+        resources_get_int_sprintf("Drive%iType", &type, devnr);
+    }
+    DBG(("vdrive_get_last_read type:%d", type));
+    /* FIXME: handle all drives here */
+    if ((type == DRIVE_TYPE_1540) ||
+        (type == DRIVE_TYPE_1541) ||
+        (type == DRIVE_TYPE_1541II) ||
+        (type == DRIVE_TYPE_1570) ||
+        (type == DRIVE_TYPE_1571) ||
+        (type == DRIVE_TYPE_1571CR) ||
+        (type == DRIVE_TYPE_2031)) {
+        /* FIXME: this assumes the DOS uses buffers at 0x400 and 0x500 */
+        *buffer = &vdrive->ram[0x400 + (num * 256)];
+    } else if (type == DRIVE_TYPE_1551) {
+        /* FIXME: this assumes the DOS uses buffers at 0x500 and 0x600 */
+        *buffer = &vdrive->ram[0x500 + (num * 256)];
+    } else {
+        /* Fallback: this assumes the DOS uses buffers at 0x400 and 0x500 */
+        *buffer = &vdrive->ram[0x400 + (num * 256)];
+    }
 }
 
-void vdrive_set_last_read(unsigned int track, unsigned int sector, uint8_t *buffer)
+int vdrive_get_last_read_ptr(void)
 {
-    last_read_track = track;
-    last_read_sector = sector;
-    memcpy(last_read_buffer, buffer, 256);
+    return last_read_ptr;
 }
+
+
+void vdrive_set_last_read(vdrive_t *vdrive, unsigned int track, unsigned int sector, uint8_t *buffer)
+{
+    int devnr = vdrive->unit;
+    int type = DRIVE_TYPE_NONE;
+    if (devnr > 7) {
+        resources_get_int_sprintf("Drive%iType", &type, devnr);
+    }
+    DBG(("vdrive_set_last_read type:%d", type));
+    last_read_ptr ^= 1;
+    last_read_track[last_read_ptr] = track;
+    last_read_sector[last_read_ptr] = sector;
+
+    /* FIXME: handle all drives here */
+    if ((type == DRIVE_TYPE_1540) ||
+        (type == DRIVE_TYPE_1541) ||
+        (type == DRIVE_TYPE_1541II) ||
+        (type == DRIVE_TYPE_1570) ||
+        (type == DRIVE_TYPE_1571) ||
+        (type == DRIVE_TYPE_1571CR) ||
+        (type == DRIVE_TYPE_2031)) {
+        /* FIXME: this assumes the DOS uses buffers at 0x400 and 0x500 */
+        memcpy(&vdrive->ram[0x400 + (last_read_ptr * 256)], buffer, 256);
+    } else if (type == DRIVE_TYPE_1551) {
+        /* FIXME: this assumes the DOS uses buffers at 0x500 and 0x600 */
+        memcpy(&vdrive->ram[0x500 + (last_read_ptr * 256)], buffer, 256);
+    } else {
+        /* Fallback: this assumes the DOS uses buffers at 0x400 and 0x500 */
+        memcpy(&vdrive->ram[0x400 + (last_read_ptr * 256)], buffer, 256);
+    }
+}
+
+/* ------------------------------------------------------------------------- */
 
 static const signed int tosec4171[71] = {
       -1,

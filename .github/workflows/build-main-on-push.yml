@@ -1,4 +1,6 @@
 name: Snapshot Build
+env:
+  PATH_ARTIFACTS: dist
 on:
   push:
     tags:
@@ -13,7 +15,7 @@ jobs:
     name: Cleanup Previous Builds
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v8
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           retries: 3
@@ -89,7 +91,7 @@ jobs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
       release_id: ${{ steps.create_release.outputs.release_id }}
     steps:
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v8
         id: create_release
         env:
           TAG_NAME: ${{ github.ref }}
@@ -120,7 +122,7 @@ jobs:
         run: git config --global core.autocrlf input
 
       - name: Checkout Source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Dependencies
         shell: bash
@@ -154,17 +156,17 @@ jobs:
                       --without-png \
                       --without-pulse
           make stylecheck
-          make
+          make -j $(sysctl -n hw.ncpu) -s
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: vice-pdf
           path: vice/doc/vice.pdf
           retention-days: 1
 
       - name: Upload Release Asset
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           UPLOAD_URL: ${{ needs.create_release.outputs.upload_url }}
           ASSET_PATH: vice/doc/vice.pdf
@@ -202,10 +204,10 @@ jobs:
         shell: bash
 
       - name: Checkout Source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download Documentation
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: vice-pdf
           path: vice/doc/
@@ -231,6 +233,7 @@ jobs:
             mingw-w64-${{ matrix.arch.arch }}-icoutils
             mingw-w64-${{ matrix.arch.arch }}-lame
             mingw-w64-${{ matrix.arch.arch }}-libpcap
+            mingw-w64-${{ matrix.arch.arch }}-libusb
             mingw-w64-${{ matrix.arch.arch }}-libvorbis
             mingw-w64-${{ matrix.arch.arch }}-mpg123
             mingw-w64-${{ matrix.arch.arch }}-ntldd
@@ -238,6 +241,7 @@ jobs:
             mingw-w64-${{ matrix.arch.arch }}-portaudio
             mingw-w64-${{ matrix.arch.arch }}-toolchain
             mingw-w64-${{ matrix.arch.arch }}-xa65
+            mingw-w64-${{ matrix.arch.arch }}-iconv
             p7zip
             subversion
             unzip
@@ -266,6 +270,7 @@ jobs:
             mingw-w64-${{ matrix.arch.arch }}-icoutils
             mingw-w64-${{ matrix.arch.arch }}-lame
             mingw-w64-${{ matrix.arch.arch }}-libpcap
+            mingw-w64-${{ matrix.arch.arch }}-libusb
             mingw-w64-${{ matrix.arch.arch }}-libvorbis
             mingw-w64-${{ matrix.arch.arch }}-mpg123
             mingw-w64-${{ matrix.arch.arch }}-ntldd
@@ -273,6 +278,7 @@ jobs:
             mingw-w64-${{ matrix.arch.arch }}-portaudio
             mingw-w64-${{ matrix.arch.arch }}-toolchain
             mingw-w64-${{ matrix.arch.arch }}-xa65
+            mingw-w64-${{ matrix.arch.arch }}-iconv
             p7zip
             subversion
             unzip
@@ -285,6 +291,7 @@ jobs:
         with:
           msystem: ${{ matrix.arch.msystem }}
           update: true
+          # CAUTION: use same packages in make-release.yml
           install: >-
             autotools
             base-devel
@@ -300,6 +307,7 @@ jobs:
             mingw-w64-${{ matrix.arch.arch }}-icoutils
             mingw-w64-${{ matrix.arch.arch }}-lame
             mingw-w64-${{ matrix.arch.arch }}-libpcap
+            mingw-w64-${{ matrix.arch.arch }}-libusb
             mingw-w64-${{ matrix.arch.arch }}-libvorbis
             mingw-w64-${{ matrix.arch.arch }}-mpg123
             mingw-w64-${{ matrix.arch.arch }}-ntldd
@@ -307,6 +315,7 @@ jobs:
             mingw-w64-${{ matrix.arch.arch }}-portaudio
             mingw-w64-${{ matrix.arch.arch }}-toolchain
             mingw-w64-${{ matrix.arch.arch }}-xa65
+            mingw-w64-${{ matrix.arch.arch }}-iconv
             p7zip
             subversion
             unzip
@@ -341,7 +350,7 @@ jobs:
 
       - name: Upload Zip
         id: upload-zip
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           UPLOAD_URL: ${{ needs.create_release.outputs.upload_url }}
           ASSET_PATH: ${{ steps.build.outputs.zip_path }}
@@ -365,7 +374,7 @@ jobs:
 
       - name: Upload 7Zip
         id: upload-7zip
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           UPLOAD_URL: ${{ needs.create_release.outputs.upload_url }}
           ASSET_PATH: ${{ steps.build.outputs.seven_zip_path }}
@@ -412,10 +421,10 @@ jobs:
         run: git config --global core.autocrlf input
 
       - name: Checkout Source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download Documentation
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: vice-pdf
           path: vice/doc/
@@ -436,6 +445,7 @@ jobs:
                               libasound-dev \
                               libcap-dev \
                               libcurl4-openssl-dev \
+                              libflac12t64 \
                               libflac-dev \
                               libgif-dev \
                               libieee1284-3-dev \
@@ -443,6 +453,9 @@ jobs:
                               libmpg123-dev \
                               libpcap-dev \
                               libpng-dev \
+                              libusb-1.0-0 \
+                              libusb-1.0-0-dev \
+                              libusb-dev \
                               libvorbis-dev \
                               portaudio19-dev \
                               texinfo \
@@ -450,6 +463,7 @@ jobs:
                               texlive-latex-extra \
                               xa65
           sudo apt install -y ${{ matrix.ui.deps }}
+          sudo apt upgrade -y
 
       - name: Build
         shell: bash
@@ -493,7 +507,7 @@ jobs:
 
       - name: Upload Deb
         id: upload_deb
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           UPLOAD_URL: ${{ needs.create_release.outputs.upload_url }}
           ASSET_PATH: ${{ steps.make_deb.outputs.deb_path }}
@@ -515,12 +529,109 @@ jobs:
               data: fs.readFileSync(ASSET_PATH)
             });
 
+  build_mac:
+    name: Build macOS Binaries
+    env:
+      SHARED_DEPS: "autoconf automake pkg-config xa lame dos2unix giflib libpng giflib libvorbis flac libusb"
+    needs: [create_release, build_doc]
+    strategy:
+      fail-fast: false
+      matrix:
+        silicon:  [ { name: 'Intel Silicon',
+                      runner: 'macos-15-intel',
+                      conf: '--enable-macos-minimum-version=15.0' },
+                    { name: 'Apple Silicon',
+                      runner: 'macos-14',
+                      conf: '--enable-macos-minimum-version=14.0' },
+                  ]
+        ui: [ { name: 'GTK3',
+                conf: '--enable-gtk3ui',
+                deps: 'gtk+3 librsvg adwaita-icon-theme glew' },
+              { name: 'SDL2',
+                conf: '--enable-sdl2ui',
+                deps: 'sdl2 sdl2_image' }
+            ]
+    runs-on: ${{ matrix.silicon.runner }}
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v6
+
+      - name: Download Documentation
+        uses: actions/download-artifact@v8
+        with:
+          name: vice-pdf
+          path: vice/doc/
+
+      - name: Homebrew Install Dependencies
+        id: homebrew
+        run: |
+          brew list -1 | xargs brew uninstall --force
+          brew update
+          brew install ${{ env.SHARED_DEPS }} ${{ matrix.ui.deps }}
+          echo "brew_prefix=$(brew --prefix)" >> $GITHUB_OUTPUT
+      
+      - name: Build
+        id: build
+        run: |
+          cd vice
+          ./src/buildtools/genvicedate_h.sh
+          ./autogen.sh
+          ./configure --enable-option-checking=fatal \
+                      --enable-option-checking \
+                      --disable-arch \
+                      --disable-html-docs \
+                      --disable-openmp \
+                      --disable-pdf-docs \
+                      --enable-cpuhistory \
+                      --enable-ethernet \
+                      --enable-midi \
+                      --enable-parsid \
+                      --with-fastsid \
+                      --with-flac \
+                      --with-gif \
+                      --with-lame \
+                      --with-libcurl \
+                      --with-png \
+                      --with-resid \
+                      --with-vorbis \
+                      ${{ matrix.ui.conf }} \
+                      ${{ matrix.silicon.conf }}
+          make -j $(sysctl -n hw.ncpu) -s
+          DEPS_PREFIX=${{ steps.homebrew.outputs.brew_prefix }} make bindistzip
+          DMG_NAME=$(ls *.dmg)
+          DMG_PATH="$(pwd)/${DMG_NAME}"
+          echo "dmg_name=${DMG_NAME}" >> $GITHUB_OUTPUT
+          echo "dmg_path=${DMG_PATH}" >> $GITHUB_OUTPUT
+
+      - name: Upload dmg
+        uses: actions/github-script@v8
+        env:
+          UPLOAD_URL: ${{ needs.create_release.outputs.upload_url }}
+          ASSET_PATH: ${{ steps.build.outputs.dmg_path }}
+          ASSET_NAME: ${{ steps.build.outputs.dmg_name }}
+          ASSET_CONTENT_TYPE: application/x-apple-diskimage
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          retries: 3
+          script: |
+            const fs = require('fs');
+            const { UPLOAD_URL, ASSET_PATH, ASSET_NAME, ASSET_CONTENT_TYPE } = process.env;
+            const uploadAssetResponse = await github.rest.repos.uploadReleaseAsset({
+              url: UPLOAD_URL,
+              headers: {
+                'content-type': ASSET_CONTENT_TYPE,
+                'content-length': fs.statSync(ASSET_PATH).size
+              },
+              name: ASSET_NAME,
+              data: fs.readFileSync(ASSET_PATH)
+            });
+
   publish_release:
     name: Publish Release
-    needs: [create_release, build, build_deb]
+    needs: [create_release, build, build_deb, build_mac]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v8
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           retries: 3
@@ -535,7 +646,7 @@ jobs:
 
   build_error_notify:
     name: IRC Notification of Build Errors
-    needs: [cleanup_previous_builds, create_release, build_doc, build, build_deb, publish_release]
+    needs: [cleanup_previous_builds, create_release, build_doc, build, build_deb, build_mac, publish_release]
     runs-on: ubuntu-latest
     if: ${{ failure() }}
     steps:
@@ -543,11 +654,11 @@ jobs:
         run: git config --global core.autocrlf input
 
       - name: Checkout Source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Notify IRC of Build Failure
         env:
           IRC_PASS: ${{ secrets.IRC_PASS }}
         shell: bash
         run: |
-          ./vice/build/github-actions/irc-message.sh "tried to build $(echo "${{ github.ref }}" | sed 's,.*/,,') but it failed :( $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          ./vice/build/github-actions/irc-message.sh "tried to build $(echo "${{ github.ref }}" | sed 's,.*/,,') but it failed :( See $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

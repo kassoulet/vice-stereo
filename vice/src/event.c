@@ -698,7 +698,7 @@ static void event_record_start_trap(uint16_t addr, void *data)
                         1, 1, 0) < 0) {
                 ui_error("Could not create start snapshot file %s.",
                         event_snapshot_path(event_start_snapshot));
-                ui_display_recording(0);
+                ui_display_recording(UI_RECORDING_STATUS_NONE);
                 return;
             }
             destroy_list();
@@ -752,7 +752,7 @@ static void event_record_start_trap(uint16_t addr, void *data)
     alarm_set(event_alarm, next_timestamp_clk);
 
     record_active = 1;
-    ui_display_recording(1);
+    ui_display_recording(UI_RECORDING_STATUS_EVENTS);
 }
 
 int event_record_start(void)
@@ -797,7 +797,7 @@ int event_record_stop(void)
 
     interrupt_maincpu_trigger_trap(event_record_stop_trap, (void *)0);
 
-    ui_display_recording(0);
+    ui_display_recording(UI_RECORDING_STATUS_NONE);
 
     alarm_unset(event_alarm);
 
@@ -1025,6 +1025,24 @@ int event_playback_active(void)
 
 /*-----------------------------------------------------------------------*/
 
+/*
+   EVENT 0.1 snapshot module format:
+
+   Type    | Name                   | Description
+   ----------------------------------------------
+
+   for each event_list_t this is NOT EVENT_TIMESTAMP
+
+   DWORD   | type                   |
+   CLOCK   | clock                  |
+   DWORD   | size                   |
+   ARRAY   | data                   |
+*/
+
+static char snap_module_name[] = "EVENT";
+#define SNAP_MAJOR 0
+#define SNAP_MINOR 1
+
 int event_snapshot_read_module(struct snapshot_s *s, int event_mode)
 {
     snapshot_module_t *m;
@@ -1036,7 +1054,7 @@ int event_snapshot_read_module(struct snapshot_s *s, int event_mode)
         return 0;
     }
 
-    m = snapshot_module_open(s, "EVENT", &major_version, &minor_version);
+    m = snapshot_module_open(s, snap_module_name, &major_version, &minor_version);
 
     /* This module is not mandatory.  */
     if (m == NULL) {
@@ -1144,7 +1162,7 @@ int event_snapshot_write_module(struct snapshot_s *s, int event_mode)
         return 0;
     }
 
-    m = snapshot_module_create(s, "EVENT", 0, 1);
+    m = snapshot_module_create(s, snap_module_name, SNAP_MAJOR, SNAP_MINOR);
 
     if (m == NULL) {
         return -1;

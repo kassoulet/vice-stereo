@@ -77,9 +77,12 @@ libwidgets_a_SOURCES = \
 	ffmpegwidget.c \
 	hvscstilwidget.c \
 	jamdialog.c \
+	joybuttonledwidget.c \
+	joyhatledwidget.c \
 	joystickautofirewidget.c \
 	joystickdevicewidget.c \
 	joystickmenupopup.c \
+	joymapdialog.c \
 	kbddebugwidget.c \
 	kbdhostlayoutwidget.c \
 	kbdmappingwidget.c \
@@ -140,13 +143,16 @@ libwidgets_a_SOURCES = \
 	settings_io.c \
 	settings_isepic.c \
 	settings_jam.c \
+	settings_joymap.c \
 	settings_joystick.c \
 	settings_keyboard.c \
 	settings_ltkernal.c \
 	settings_magicvoice.c \
+	settings_megabyter.c \
 	settings_megacart.c \
 	settings_midi.c \
 	settings_misc.c \
+	settings_minimon.c \
 	settings_mixer.c \
 	settings_mmc64.c \
 	settings_mmcr.c \
@@ -248,6 +254,9 @@ EXTRA_DIST = \
 	ffmpegwidget.h \
 	hvscstilwidget.h \
 	jamdialog.h \
+	joybuttonledwidget.h \
+	joyhatledwidget.h \
+	joymapdialog.h \
 	joystickautofirewidget.h \
 	joystickdevicewidget.h \
 	joystickmenupopup.h \
@@ -311,13 +320,16 @@ EXTRA_DIST = \
 	settings_io.h \
 	settings_isepic.h \
 	settings_jam.h \
+	settings_joymap.h \
 	settings_joystick.h \
 	settings_keyboard.h \
 	settings_ltkernal.h \
 	settings_magicvoice.h \
+	settings_megabyter.h \
 	settings_megacart.h \
 	settings_midi.h \
 	settings_misc.h \
+	settings_minimon.h \
 	settings_mixer.h \
 	settings_mmc64.h \
 	settings_mmcr.h \

@@ -71,7 +71,7 @@
 static tap_t *current_image[TAPEPORT_MAX_PORTS];
 
 /* Buffer for the TAP */
-static uint8_t tap_buffer[TAPEPORT_MAX_PORTS][TAP_BUFFER_LENGTH];
+static uint8_t *tap_buffer[TAPEPORT_MAX_PORTS];
 
 /* Pointer and length of the tap-buffer */
 static long next_tap[TAPEPORT_MAX_PORTS], last_tap[TAPEPORT_MAX_PORTS];
@@ -880,13 +880,19 @@ void datasette_set_tape_image(int port, tap_t *image)
 {
     CLOCK gap;
 
-    DBG(("datasette_set_tape_image (image present:%s)", image ? "yes" : "no"));
+    DBG(("datasette_set_tape_image (image present:%s) tap_buffer[%d] %p",
+         image ? "yes" : "no", port, (void*)tap_buffer[port]));
 
     current_image[port] = image;
     last_tap[port] = next_tap[port] = 0;
     datasette_internal_reset(port);
 
     if (image != NULL) {
+        /* allocate buffer for the image */
+        if (tap_buffer[port] == NULL) {
+            tap_buffer[port] = lib_malloc(TAP_BUFFER_LENGTH);
+            DBG(("allocated tap_buffer[%d] %p", port, (void*)tap_buffer[port]));
+        }
         /* We need the length of tape for realistic counter. */
         current_image[port]->cycle_counter_total = 0;
         do {
@@ -904,6 +910,15 @@ void datasette_set_tape_image(int port, tap_t *image)
     fullwave[port] = 0;
 
     ui_set_tape_status(port, current_image[port] ? 1 : 0);
+
+    /* if image was removed, get rid of the buffer */
+    if (image == NULL) {
+        if (tap_buffer[port] != NULL) {
+            DBG(("free tap_buffer[%d] %p", port, (void*)tap_buffer[port]));
+            lib_free(tap_buffer[port]);
+            tap_buffer[port] = NULL;
+        }
+    }
 }
 
 
@@ -1344,6 +1359,30 @@ void datasette_event_playback_port2(CLOCK offset, void *data)
 /*******************************************************************************
     Snapshot support
  ******************************************************************************/
+
+/* DATASETTE 1.5 snapshot module format:
+
+   type  | name                             | description
+   -------------------------------------------------------
+   BYTE  | datasette_motor                  |
+   BYTE  | notape_mode                      |
+   CLOCK | last_write_clk                   |
+   CLOCK | motor_stop_clk                   |
+   BYTE  | datasette_alarm_pending          |
+   CLOCK | alarm_clk                        |
+   CLOCK | datasette_long_gap_pending       |
+   CLOCK | datasette_long_gap_elapsed       |
+   BYTE  | datasette_last_direction         |
+   DWORD | datasette_counter_offset         |
+   BYTE  | reset_datasette_with_maincpu     |
+   DWORD | datasette_zero_gap_delay         |
+   DWORD | datasette_speed_tuning           |
+   DWORD | datasette_tape_wobble_frequency  |
+   DWORD | datasette_tape_wobble_amplitude  |
+   DWORD | datasette_tape_azimuth_error     |
+   BYTE  | fullwave                         |
+   CLOCK | fullwave_gap                     |
+*/
 
 #define DATASETTE_SNAP_MAJOR 1
 #define DATASETTE_SNAP_MINOR 5

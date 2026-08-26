@@ -144,8 +144,8 @@ static const char* sdl_ui_get_file_selector_entry(archdep_dir_t *directory, int 
 #if (ARCHDEP_DIR_SEP_CHR == '\\')
 static void sdl_ui_print_translate_seperator(const char *text, int x, int y)
 {
-    unsigned int len;
-    unsigned int i;
+    size_t len;
+    size_t i;
     char *new_text = NULL;
 
     len = strlen(text);
@@ -167,7 +167,7 @@ static void sdl_ui_display_path(const char *current_dir)
 {
     int len;
     char *text = NULL;
-    char *temp = NULL;
+    const char *temp = NULL;
     int before = 0;
     int after = 0;
     int pos = 0;

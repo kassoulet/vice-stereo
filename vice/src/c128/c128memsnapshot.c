@@ -53,6 +53,17 @@
 
 static log_t c128_snapshot_log = LOG_DEFAULT;
 
+
+/* C128ROM 0.0 snapshot module format:
+
+   type  | name    | description
+   -----------------------------
+   ARRAY | KERNAL  | 8192 BYTES of KERNAL ROM data
+   ARRAY | BASIC LO| 16384 BYTES of BASIC ROM data
+   ARRAY | BASIC HI| 16384 BYTES of BASIC ROM data
+   ARRAY | CHARGEN | 8192 BYTES of CHARGEN ROM data
+ */
+
 static char snap_rom_module_name[] = "C128ROM";
 #define SNAP_ROM_MAJOR 0
 #define SNAP_ROM_MINOR 0
@@ -102,7 +113,7 @@ static void get_trapflags(void)
 {
     int i;
     for(i = 0; trapdevices[i] != -1; i++) {
-        resources_get_int_sprintf("VirtualDevice%d", &trapfl[i], trapdevices[i]);
+        resources_get_int_sprintf("TrapDevice%d", &trapfl[i], trapdevices[i]);
     }
 }
 
@@ -110,7 +121,7 @@ static void clear_trapflags(void)
 {
     int i;
     for(i = 0; trapdevices[i] != -1; i++) {
-        resources_set_int_sprintf("VirtualDevice%d", 0, trapdevices[i]);
+        resources_set_int_sprintf("TrapDevice%d", 0, trapdevices[i]);
     }
 }
 
@@ -118,7 +129,7 @@ static void restore_trapflags(void)
 {
     int i;
     for(i = 0; trapdevices[i] != -1; i++) {
-        resources_set_int_sprintf("VirtualDevice%d", trapfl[i], trapdevices[i]);
+        resources_set_int_sprintf("TrapDevice%d", trapfl[i], trapdevices[i]);
     }
 }
 
@@ -180,6 +191,15 @@ fail:
     }
     return -1;
 }
+
+/* C128MEM 0.0 snapshot module format:
+
+   type       | name                | version | description
+   ---------------------------------------------------
+   11 * BYTE  | mmu regs            |   0.0   | dump of mmu registers
+   ARRAY      | RAM                 |   0.0   | 0x40000 BYTES of RAM data
+
+ */
 
 static char snap_module_name[] = "C128MEM";
 #define SNAP_MAJOR 0

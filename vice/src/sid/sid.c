@@ -38,6 +38,7 @@
 #include "catweaselmkiii.h"
 #include "fastsid.h"
 #include "hardsid.h"
+#include "usbsid.h"
 #include "joyport.h"
 #include "lib.h"
 #include "machine.h"
@@ -57,6 +58,18 @@
 
 #ifdef HAVE_RESID
 #include "resid.h"
+#endif
+
+#ifdef HAVE_RESIDFP
+#include "residfp.h"
+#endif
+
+/*#define DEBUG_SID*/
+
+#ifdef DEBUG_SID
+#define DBG(x)  log_printf x
+#else
+#define DBG(x)
 #endif
 
 /* SID engine hooks. */
@@ -109,7 +122,12 @@ sid_engine_t fakesid_hooks =
     fakesid_resid_state_write
 };
 
-struct sound_s {};
+struct sound_s {
+/* empty struct is a GNU extension, so add a dummy for non GNU compilers */
+#ifndef __GNUC__
+    uint8_t dummy;
+#endif
+};
 
 /* ------------------------------------------------------------------------- */
 
@@ -172,6 +190,45 @@ static void sid_alarm_init(void)
 #endif
 /* ------------------------------------------------------------------------- */
 
+/* Add some randomness to the pot value(s). Note that _with paddles_ the error
+   gets gradually worse depending on the sampled value (the larger the value,
+   the bigger error. This does _not_ happen with the 1351 mouse */
+static inline uint8_t makepotval(int value)
+{
+    unsigned int fuzz;
+
+    if (get_joyport_pot_type() == JOYPORT_POT_TYPE_ANALOG) {
+        fuzz = lib_unsigned_rand(0, (value * 5) / 255);
+    } else {
+        fuzz = lib_unsigned_rand(0, 1);
+    }
+
+    value += fuzz;
+    if (value > 255) {
+        return 255;
+    }
+    return value;
+}
+
+/* this creates a "glitched" value that might be read in the first incomplete
+   sample period after switching the control port */
+static inline uint8_t makebadpotval(int value, int clkdiff)
+{
+    unsigned int fuzz;
+
+    if (get_joyport_pot_type() == JOYPORT_POT_TYPE_ANALOG) {
+        fuzz = lib_unsigned_rand(0, (clkdiff * 32) / 255);
+    } else {
+        fuzz = lib_unsigned_rand(0, 255);
+    }
+
+    value += fuzz;
+    if (value > 255) {
+        return 255;
+    }
+    return value;
+}
+
 static uint8_t sid_read_chip(uint16_t addr, int chipno)
 {
     int val = -1;
@@ -183,15 +240,26 @@ static uint8_t sid_read_chip(uint16_t addr, int chipno)
 #ifdef HAVE_MOUSE
     if (chipno == 0 && (addr == 0x19 || addr == 0x1a)) {
 #if 1
-        if ((maincpu_clk ^ pot_cycle) & ~511) {
-            pot_cycle = maincpu_clk & ~511; /* simplistic 512 cycle sampling */
+        CLOCK port_changed_clk = get_joyport_pot_mask_clk();
+        CLOCK port_changed_diff_clk = maincpu_clk - port_changed_clk;
+        if (port_changed_diff_clk > 511) {
+            /* produce a regular value */
+            if ((maincpu_clk ^ pot_cycle) & ~511) {
+                pot_cycle = maincpu_clk & ~511; /* simplistic 512 cycle sampling */
 
-            if (_mouse_enabled) {
-                mouse_poll();
+                if (_mouse_enabled) {
+                    mouse_poll();
+                }
+
+                val_pot_x = makepotval(read_joyport_potx());
+                val_pot_y = makepotval(read_joyport_poty());
             }
-
-            val_pot_x = read_joyport_potx();
-            val_pot_y = read_joyport_poty();
+        } else {
+            /* produce a "bad" value in case the POT register was read within
+               the first sample period after switching the port */
+            pot_cycle = port_changed_clk & ~511;
+            val_pot_x = makebadpotval(read_joyport_potx(), 512 - (int)port_changed_diff_clk);
+            val_pot_y = makebadpotval(read_joyport_poty(), 512 - (int)port_changed_diff_clk);
         }
 #endif
         val = (addr == 0x19) ? val_pot_x : val_pot_y;
@@ -313,6 +381,18 @@ uint8_t sid_read(uint16_t addr)
         return sid_read_chip(addr, 7);
     }
 
+    if (sid_stereo >= 8
+        && addr >= sid9_address_start
+        && addr < sid9_address_end) {
+        return sid_read_chip(addr, 8);
+    }
+
+    if (sid_stereo >= 9
+        && addr >= sid10_address_start
+        && addr < sid10_address_end) {
+        return sid_read_chip(addr, 9);
+    }
+
     return sid_read_chip(addr, 0);
 }
 
@@ -329,6 +409,8 @@ SIDx_READ(5)
 SIDx_READ(6)
 SIDx_READ(7)
 SIDx_READ(8)
+SIDx_READ(9)
+SIDx_READ(10)
 
 uint8_t sid_peek(uint16_t addr)
 {
@@ -373,6 +455,18 @@ uint8_t sid_peek(uint16_t addr)
         && addr < sid8_address_end) {
         return sid_peek_chip(addr, 7);
     }
+
+    if (sid_stereo >= 8
+        && addr >= sid9_address_start
+        && addr < sid9_address_end) {
+        return sid_peek_chip(addr, 8);
+    }
+
+    if (sid_stereo >= 9
+        && addr >= sid10_address_start
+        && addr < sid10_address_end) {
+        return sid_peek_chip(addr, 9);
+    }
     return sid_peek_chip(addr, 0);
 }
 
@@ -389,6 +483,8 @@ SIDx_PEEK(5)
 SIDx_PEEK(6)
 SIDx_PEEK(7)
 SIDx_PEEK(8)
+SIDx_PEEK(9)
+SIDx_PEEK(10)
 
 void sid_store(uint16_t addr, uint8_t byte)
 {
@@ -408,30 +504,49 @@ void sid_store(uint16_t addr, uint8_t byte)
         && addr >= sid4_address_start
         && addr < sid4_address_end) {
         sid_store_chip(addr, byte, 3);
+        return;
     }
 
     if (sid_stereo >= 4
         && addr >= sid5_address_start
         && addr < sid5_address_end) {
         sid_store_chip(addr, byte, 4);
+        return;
     }
 
     if (sid_stereo >= 5
         && addr >= sid6_address_start
         && addr < sid6_address_end) {
         sid_store_chip(addr, byte, 5);
+        return;
     }
 
     if (sid_stereo >= 6
         && addr >= sid7_address_start
         && addr < sid7_address_end) {
         sid_store_chip(addr, byte, 6);
+        return;
     }
 
     if (sid_stereo >= 7
         && addr >= sid8_address_start
         && addr < sid8_address_end) {
         sid_store_chip(addr, byte, 7);
+        return;
+    }
+
+    if (sid_stereo >= 8
+        && addr >= sid9_address_start
+        && addr < sid9_address_end) {
+        sid_store_chip(addr, byte, 8);
+        return;
+    }
+
+    if (sid_stereo >= 9
+        && addr >= sid10_address_start
+        && addr < sid10_address_end) {
+        sid_store_chip(addr, byte, 9);
+        return;
     }
     sid_store_chip(addr, byte, 0);
     sid_store_chip(addr, byte, 1);
@@ -450,6 +565,8 @@ SIDx_STORE(5)
 SIDx_STORE(6)
 SIDx_STORE(7)
 SIDx_STORE(8)
+SIDx_STORE(9)
+SIDx_STORE(10)
 
 int sid_dump(void)
 {
@@ -469,6 +586,8 @@ SIDx_DUMP(5)
 SIDx_DUMP(6)
 SIDx_DUMP(7)
 SIDx_DUMP(8)
+SIDx_DUMP(9)
+SIDx_DUMP(10)
 
 /* ------------------------------------------------------------------------- */
 
@@ -490,12 +609,11 @@ static int sidengine;
 bool sid_sound_machine_set_engine_hooks(void)
 {
     sidengine = -1;
+    sid_engine = fakesid_hooks;
 
     if (resources_get_int("SidEngine", &sidengine) < 0) {
         return false;
     }
-
-    sid_engine = fakesid_hooks;
 
 #ifdef HAVE_FASTSID
     if (sidengine == SID_ENGINE_FASTSID) {
@@ -506,6 +624,12 @@ bool sid_sound_machine_set_engine_hooks(void)
 #ifdef HAVE_RESID
     if (sidengine == SID_ENGINE_RESID) {
         sid_engine = resid_hooks;
+    }
+#endif
+
+#ifdef HAVE_RESIDFP
+    if (sidengine == SID_ENGINE_RESIDFP) {
+        sid_engine = residfp_hooks;
     }
 #endif
     if (sidengine >= 0) {
@@ -519,7 +643,6 @@ sound_t *sid_sound_machine_open(int chipno)
     if (!sid_sound_machine_set_engine_hooks()) {
         return NULL;
     }
-
     return sid_engine.open(siddata[chipno]);
 }
 
@@ -533,6 +656,8 @@ static int16_t *buf4 = NULL;
 static int16_t *buf5 = NULL;
 static int16_t *buf6 = NULL;
 static int16_t *buf7 = NULL;
+static int16_t *buf8 = NULL;
+static int16_t *buf9 = NULL;
 
 static int blen1 = 0;
 static int blen2 = 0;
@@ -541,6 +666,8 @@ static int blen4 = 0;
 static int blen5 = 0;
 static int blen6 = 0;
 static int blen7 = 0;
+static int blen8 = 0;
+static int blen9 = 0;
 
 #define GETBUFx(nr)                                 \
     static int16_t *getbuf##nr(int len)             \
@@ -564,6 +691,8 @@ GETBUFx(4)
 GETBUFx(5)
 GETBUFx(6)
 GETBUFx(7)
+GETBUFx(8)
+GETBUFx(9)
 
 #endif
 
@@ -574,6 +703,9 @@ int sid_sound_machine_init_vbr(sound_t *psid, int speed, int cycles_per_sec, int
 
 int sid_sound_machine_init(sound_t *psid, int speed, int cycles_per_sec)
 {
+    #ifdef HAVE_USBSID
+    usbsid_open();
+    #endif
     return sid_engine.init(psid, speed, cycles_per_sec, 1000);
 }
 
@@ -617,6 +749,19 @@ void sid_sound_machine_close(sound_t *psid)
         blen7 = 0;
         buf7 = NULL;
     }
+    if (buf8) {
+        lib_free(buf8);
+        blen8 = 0;
+        buf8 = NULL;
+    }
+    if (buf9) {
+        lib_free(buf9);
+        blen9 = 0;
+        buf9 = NULL;
+    }
+#endif
+#ifdef HAVE_USBSID
+    usbsid_close();
 #endif
 }
 
@@ -633,6 +778,9 @@ void sid_sound_machine_store(sound_t *psid, uint16_t addr, uint8_t byte)
 void sid_sound_machine_reset(sound_t *psid, CLOCK cpu_clk)
 {
     sid_engine.reset(psid, cpu_clk);
+    #ifdef HAVE_USBSID
+    usbsid_reset(true); /* This is called when the STOP button is pressed */
+    #endif
 }
 
 #ifdef SOUND_SYSTEM_FLOAT
@@ -652,6 +800,8 @@ int sid_sound_machine_calculate_samples(sound_t **psid, int16_t *pbuf, int nr, i
     int16_t *tmp_buf5;
     int16_t *tmp_buf6;
     int16_t *tmp_buf7;
+    int16_t *tmp_buf8;
+    int16_t *tmp_buf9;
     int tmp_nr = 0;
     CLOCK tmp_delta_t = *delta_t;
 
@@ -805,6 +955,84 @@ int sid_sound_machine_calculate_samples(sound_t **psid, int16_t *pbuf, int nr, i
         }
         return tmp_nr;
     }
+    if (soc == SOUND_OUTPUT_MONO && scc == SOUND_9_DEVICES) {
+        tmp_buf1 = getbuf1(2 * nr);
+        tmp_buf2 = getbuf2(2 * nr);
+        tmp_buf3 = getbuf3(2 * nr);
+        tmp_buf4 = getbuf4(2 * nr);
+        tmp_buf5 = getbuf5(2 * nr);
+        tmp_buf6 = getbuf6(2 * nr);
+        tmp_buf7 = getbuf7(2 * nr);
+        tmp_buf8 = getbuf8(2 * nr);
+        tmp_nr = sid_engine.calculate_samples(psid[0], tmp_buf1, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[2], tmp_buf2, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[3], tmp_buf3, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[4], tmp_buf4, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[5], tmp_buf5, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[6], tmp_buf6, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[7], tmp_buf7, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[8], tmp_buf8, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_nr = sid_engine.calculate_samples(psid[1], pbuf, nr, SOUND_OUTPUT_MONO, delta_t);
+        for (i = 0; i < tmp_nr; i++) {
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf1[i]);
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf2[i]);
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf3[i]);
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf4[i]);
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf5[i]);
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf6[i]);
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf7[i]);
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf8[i]);
+        }
+        return tmp_nr;
+    }
+    if (soc == SOUND_OUTPUT_MONO && scc == SOUND_10_DEVICES) {
+        tmp_buf1 = getbuf1(2 * nr);
+        tmp_buf2 = getbuf2(2 * nr);
+        tmp_buf3 = getbuf3(2 * nr);
+        tmp_buf4 = getbuf4(2 * nr);
+        tmp_buf5 = getbuf5(2 * nr);
+        tmp_buf6 = getbuf6(2 * nr);
+        tmp_buf7 = getbuf7(2 * nr);
+        tmp_buf8 = getbuf8(2 * nr);
+        tmp_buf9 = getbuf9(2 * nr);
+        tmp_nr = sid_engine.calculate_samples(psid[0], tmp_buf1, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[2], tmp_buf2, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[3], tmp_buf3, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[4], tmp_buf4, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[5], tmp_buf5, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[6], tmp_buf6, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[7], tmp_buf7, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[8], tmp_buf8, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[9], tmp_buf9, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_nr = sid_engine.calculate_samples(psid[1], pbuf, nr, SOUND_OUTPUT_MONO, delta_t);
+        for (i = 0; i < tmp_nr; i++) {
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf1[i]);
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf2[i]);
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf3[i]);
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf4[i]);
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf5[i]);
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf6[i]);
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf7[i]);
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf8[i]);
+            pbuf[i] = sound_audio_mix(pbuf[i], tmp_buf9[i]);
+        }
+        return tmp_nr;
+    }
     if (soc == SOUND_OUTPUT_STEREO && scc == SOUND_1_DEVICE) {
         tmp_nr = sid_engine.calculate_samples(psid[0], pbuf, nr, SOUND_OUTPUT_STEREO, delta_t);
         for (i = 0; i < tmp_nr; i++) {
@@ -931,6 +1159,72 @@ int sid_sound_machine_calculate_samples(sound_t **psid, int16_t *pbuf, int nr, i
             pbuf[(i * 2) + 1] = sound_audio_mix(pbuf[(i * 2) + 1], tmp_buf3[(i * 2) + 1]);
         }
     }
+    if (soc == SOUND_OUTPUT_STEREO && scc == SOUND_9_DEVICES) {
+        tmp_buf1 = getbuf1(2 * nr);
+        tmp_buf2 = getbuf2(2 * nr);
+        tmp_buf3 = getbuf3(2 * nr);
+        tmp_buf4 = getbuf4(2 * nr);
+        tmp_nr = sid_engine.calculate_samples(psid[2], tmp_buf1, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[3], tmp_buf1 + 1, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[4], tmp_buf2, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[5], tmp_buf2 + 1, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[6], tmp_buf3, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[7], tmp_buf3 + 1, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[8], tmp_buf4, nr, SOUND_OUTPUT_MONO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[0], pbuf, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_nr = sid_engine.calculate_samples(psid[1], pbuf + 1, nr, SOUND_OUTPUT_STEREO, delta_t);
+        for (i = 0; i < tmp_nr; i++) {
+            pbuf[i * 2] = sound_audio_mix(pbuf[i * 2], tmp_buf1[i * 2]);
+            pbuf[i * 2] = sound_audio_mix(pbuf[i * 2], tmp_buf2[i * 2]);
+            pbuf[i * 2] = sound_audio_mix(pbuf[i * 2], tmp_buf3[i * 2]);
+            pbuf[i * 2] = sound_audio_mix(pbuf[i * 2], tmp_buf4[i]);
+            pbuf[(i * 2) + 1] = sound_audio_mix(pbuf[(i * 2) + 1], tmp_buf1[(i * 2) + 1]);
+            pbuf[(i * 2) + 1] = sound_audio_mix(pbuf[(i * 2) + 1], tmp_buf2[(i * 2) + 1]);
+            pbuf[(i * 2) + 1] = sound_audio_mix(pbuf[(i * 2) + 1], tmp_buf3[(i * 2) + 1]);
+            pbuf[(i * 2) + 1] = sound_audio_mix(pbuf[(i * 2) + 1], tmp_buf4[i]);
+        }
+    }
+    if (soc == SOUND_OUTPUT_STEREO && scc == SOUND_10_DEVICES) {
+        tmp_buf1 = getbuf1(2 * nr);
+        tmp_buf2 = getbuf2(2 * nr);
+        tmp_buf3 = getbuf3(2 * nr);
+        tmp_buf4 = getbuf4(2 * nr);
+        tmp_nr = sid_engine.calculate_samples(psid[2], tmp_buf1, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[3], tmp_buf1 + 1, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[4], tmp_buf2, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[5], tmp_buf2 + 1, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[6], tmp_buf3, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[7], tmp_buf3 + 1, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[8], tmp_buf4, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[9], tmp_buf4 + 1, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_delta_t = *delta_t;
+        tmp_nr = sid_engine.calculate_samples(psid[0], pbuf, nr, SOUND_OUTPUT_STEREO, &tmp_delta_t);
+        tmp_nr = sid_engine.calculate_samples(psid[1], pbuf + 1, nr, SOUND_OUTPUT_STEREO, delta_t);
+        for (i = 0; i < tmp_nr; i++) {
+            pbuf[i * 2] = sound_audio_mix(pbuf[i * 2], tmp_buf1[i * 2]);
+            pbuf[i * 2] = sound_audio_mix(pbuf[i * 2], tmp_buf2[i * 2]);
+            pbuf[i * 2] = sound_audio_mix(pbuf[i * 2], tmp_buf3[i * 2]);
+            pbuf[i * 2] = sound_audio_mix(pbuf[i * 2], tmp_buf4[i * 2]);
+            pbuf[(i * 2) + 1] = sound_audio_mix(pbuf[(i * 2) + 1], tmp_buf1[(i * 2) + 1]);
+            pbuf[(i * 2) + 1] = sound_audio_mix(pbuf[(i * 2) + 1], tmp_buf2[(i * 2) + 1]);
+            pbuf[(i * 2) + 1] = sound_audio_mix(pbuf[(i * 2) + 1], tmp_buf3[(i * 2) + 1]);
+            pbuf[(i * 2) + 1] = sound_audio_mix(pbuf[(i * 2) + 1], tmp_buf4[(i * 2) + 1]);
+        }
+    }
     return tmp_nr;
 }
 #endif
@@ -943,10 +1237,16 @@ char *sid_sound_machine_dump_state(sound_t *psid)
 int sid_sound_machine_cycle_based(void)
 {
     switch (sidengine) {
+#ifdef HAVE_FASTSID
         case SID_ENGINE_FASTSID:
             return 0;
+#endif
 #ifdef HAVE_RESID
         case SID_ENGINE_RESID:
+            return 1;
+#endif
+#ifdef HAVE_RESIDFP
+        case SID_ENGINE_RESIDFP:
             return 1;
 #endif
 #ifdef HAVE_CATWEASELMKIII
@@ -962,6 +1262,10 @@ int sid_sound_machine_cycle_based(void)
         case SID_ENGINE_PARSID:
             return 0;
 #endif
+#endif
+#ifdef HAVE_USBSID
+        case SID_ENGINE_USBSID:
+            return 0;
 #endif
     }
 
@@ -979,14 +1283,27 @@ int sid_sound_machine_channels(void)
 
 static void set_sound_func(void)
 {
+    sid_read_func = sid_read_off;
+    sid_store_func = sid_write_off;
+    sid_dump_func = NULL;
+    DBG(("set_sound_func enable:%d engine:%d\n", sid_enable, sid_engine_type));
     if (sid_enable) {
+#ifdef HAVE_FASTSID
         if (sid_engine_type == SID_ENGINE_FASTSID) {
             sid_read_func = sound_read;
             sid_store_func = sound_store;
             sid_dump_func = sound_dump;
         }
+#endif
 #ifdef HAVE_RESID
         if (sid_engine_type == SID_ENGINE_RESID) {
+            sid_read_func = sound_read;
+            sid_store_func = sound_store;
+            sid_dump_func = sound_dump;
+        }
+#endif
+#ifdef HAVE_RESIDFP
+        if (sid_engine_type == SID_ENGINE_RESIDFP) {
             sid_read_func = sound_read;
             sid_store_func = sound_store;
             sid_dump_func = sound_dump;
@@ -1015,22 +1332,26 @@ static void set_sound_func(void)
         }
 #endif
 #endif
-    } else {
-        sid_read_func = sid_read_off;
-        sid_store_func = sid_write_off;
-        sid_dump_func = NULL;
+#ifdef HAVE_USBSID
+        if (sid_engine_type == SID_ENGINE_USBSID) {
+            sid_read_func = usbsid_read;
+            sid_store_func = usbsid_store;
+            sid_dump_func = NULL; /* TODO: usbsid dump */
+        }
+#endif
     }
 }
 
 void sid_sound_machine_enable(int enable)
 {
     sid_enable = enable;
-
+    DBG(("sid_sound_machine_enable %d\n", enable));
     set_sound_func();
 }
 
 int sid_engine_set(int engine)
 {
+    DBG(("sid_engine_set %d\n", engine));
 #ifdef HAVE_CATWEASELMKIII
     if (engine == SID_ENGINE_CATWEASELMKIII
         && sid_engine_type != SID_ENGINE_CATWEASELMKIII) {
@@ -1069,7 +1390,18 @@ int sid_engine_set(int engine)
     }
 #endif
 #endif
-
+#ifdef HAVE_USBSID
+    if (engine == SID_ENGINE_USBSID
+        && sid_engine_type != SID_ENGINE_USBSID) {
+        if (usbsid_open() < 0) {
+            return -1;
+        }
+    }
+    if (engine != SID_ENGINE_USBSID
+        && sid_engine_type == SID_ENGINE_USBSID) {
+        usbsid_close();
+    }
+#endif
     sid_engine_type = engine;
 
     set_sound_func();
@@ -1106,6 +1438,9 @@ void sid_set_machine_parameter(long clock_rate)
 #ifdef HAVE_HARDSID
     hardsid_set_machine_parameter(clock_rate);
 #endif
+#ifdef HAVE_USBSID
+    usbsid_set_machine_parameter(clock_rate);
+#endif
 }
 
 
@@ -1121,10 +1456,18 @@ void sid_set_machine_parameter(long clock_rate)
 int sid_engine_get_max_sids(int engine)
 {
     switch (engine) {
+#ifdef HAVE_FASTSID
         case SID_ENGINE_FASTSID:
             return SID_ENGINE_FASTSID_NUM_SIDS;
+#endif
+#if defined(HAVE_RESID) || defined(HAVE_RESID_DTV)
         case SID_ENGINE_RESID:
             return SID_ENGINE_RESID_NUM_SIDS;
+#endif
+#ifdef HAVE_RESIDFP
+        case SID_ENGINE_RESIDFP:
+            return SID_ENGINE_RESIDFP_NUM_SIDS;
+#endif
         case SID_ENGINE_CATWEASELMKIII:
             return SID_ENGINE_CATWEASELMKIII_NUM_SIDS;
         case SID_ENGINE_HARDSID:
@@ -1133,6 +1476,8 @@ int sid_engine_get_max_sids(int engine)
         case SID_ENGINE_PARSID:
             return SID_ENGINE_PARSID_NUM_SIDS;
 #endif
+        case SID_ENGINE_USBSID:
+            return SID_ENGINE_USBSID_NUM_SIDS;
         default:
             /* unknow engine */
             return -1;

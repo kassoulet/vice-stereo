@@ -145,12 +145,15 @@
 #include "userport_hummer_joystick.h"
 #include "userport_io_sim.h"
 #include "userport_petscii_snespad.h"
+#include "userport_ps2mouse.h"
 #include "userport_rtc_58321a.h"
 #include "userport_rtc_ds1307.h"
 #include "userport_spt_joystick.h"
 #include "userport_superpad64.h"
 #include "userport_synergy_joystick.h"
+#include "userport_v8_joystick.h"
 #include "userport_wic64.h"
+#include "userport_funmp3.h"
 
 #include "c64parallel.h"
 #include "plus4parallel.h"
@@ -184,6 +187,7 @@ static type2text_t device_type_desc[] = {
 #ifdef USERPORT_EXPERIMENTAL_DEVICES
     { USERPORT_DEVICE_TYPE_HARNESS, "Diagnostic harness" },
 #endif
+    { USERPORT_DEVICE_TYPE_MOUSE_ADAPTER, "Mouse adapter" },
     { -1, NULL }
 };
 
@@ -500,8 +504,15 @@ void store_userport_pa3(uint8_t val)
     }
 }
 
+/* called by userport devices to set the !FLAG line.
+   CAUTION: make sure to only call this from devices that are actually connected
+            to the userport!
+    val: 0 signal hi->lo
+    val: 1 signal lo->hi
+*/
 void set_userport_flag(uint8_t val)
 {
+    DBG(("set_userport_flag (val:%d)", val));
     if (userport_active) {
         if (userport_props.set_flag) {
             userport_props.set_flag(val);
@@ -677,6 +688,12 @@ static userport_init_t userport_devices_init[] = {
       NULL,                                     /* resources shutdown function */
       NULL                                      /* cmdline options init function */
     },
+    { USERPORT_DEVICE_JOYSTICK_V8,              /* device id */
+      UP_C64 | UP_VIC20 | UP_DTV | UP_PET,      /* emulators this device works on */
+      userport_joystick_v8_resources_init,      /* resources init function */
+      NULL,                                     /* resources shutdown function */
+      NULL                                      /* cmdline options init function */
+    },
     { USERPORT_DEVICE_JOYSTICK_WOJ,                     /* device id */
       UP_C64 | UP_VIC20 | UP_PLUS4 | UP_PET | UP_CBM2,  /* emulators this device works on */
       userport_joystick_woj_resources_init,             /* resources init function */
@@ -778,15 +795,34 @@ static userport_init_t userport_devices_init[] = {
       userport_diag_pin_cmdline_options_init    /* cmdline options init function */
     },
 
+    { USERPORT_DEVICE_MOUSE_PS2,                /* device id */
+      UP_DTV,                                   /* emulators this device works on */
+      userport_ps2mouse_resources_init,         /* resources init function */
+      NULL,                                     /* resources shutdown function */
+      NULL                                      /* cmdline options init function */
+    },
+#if defined(USE_MPG123) && defined (HAVE_GLOB_H)
+    { USERPORT_DEVICE_FUNMP3,                /* device id */
+      UP_C64 | UP_VIC20,                     /* emulators this device works on */
+      userport_funmp3_resources_init,        /* resources init function */
+      userport_funmp3_resources_shutdown,    /* resources shutdown function */
+      userport_funmp3_cmdline_options_init   /* cmdline options init function */
+    },
+#endif
+
     { USERPORT_DEVICE_NONE, VICE_MACHINE_NONE, NULL, NULL, NULL },   /* end of the devices list */
 };
 
 static int userport_devices_resources_init(void)
 {
     int i = 0;
-
+    DBG(("userport_devices_resources_init"));
     while (userport_devices_init[i].device_id != USERPORT_DEVICE_NONE) {
         if (userport_devices_init[i].emu_mask & machine_class) {
+            DBG(("userport_devices_resources_init %d id %d (%p:%p)",
+                 i, userport_devices_init[i].device_id,
+                 (void*)userport_devices_init[i].userport_device_resources_init,
+                 (void*)userport_devices_init[i].userport_device_resources_shutdown));
             if (userport_devices_init[i].userport_device_resources_init) {
                 if (userport_devices_init[i].userport_device_resources_init() < 0) {
                     DBG(("userport_devices_resources_init failed for id %d", userport_devices_init[i].device_id));
@@ -803,9 +839,13 @@ static int userport_devices_resources_init(void)
 static void userport_devices_resources_shutdown(void)
 {
     int i = 0;
-
+    DBG(("userport_devices_resources_shutdown"));
     while (userport_devices_init[i].device_id != USERPORT_DEVICE_NONE) {
         if (userport_devices_init[i].emu_mask & machine_class) {
+            DBG(("userport_devices_resources_shutdown %d id %d (%p:%p)",
+                 i, userport_devices_init[i].device_id,
+                 (void*)userport_devices_init[i].userport_device_resources_init,
+                 (void*)userport_devices_init[i].userport_device_resources_shutdown));
             if (userport_devices_init[i].userport_device_resources_shutdown) {
                 userport_devices_init[i].userport_device_resources_shutdown();
             }
@@ -828,6 +868,7 @@ static const resource_int_t resources_int[] = {
 
 int userport_resources_init(void)
 {
+    DBG(("userport_resources_init"));
     memset(userport_device, 0, sizeof(userport_device));
     userport_device[0].name = "None";
     userport_device[0].joystick_adapter_id = JOYSTICK_ADAPTER_ID_NONE;
@@ -921,6 +962,10 @@ static const struct userport_opt_s id_match[] = {
 #endif
     { "space",              USERPORT_DEVICE_SPACEBALLS },
     { "spaceballs",         USERPORT_DEVICE_SPACEBALLS },
+#if defined(USE_MPG123) && defined (HAVE_GLOB_H)
+    { "funmp3",             USERPORT_DEVICE_FUNMP3 },
+#endif
+
     { NULL, -1 }
 };
 

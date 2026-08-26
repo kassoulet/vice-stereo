@@ -55,6 +55,10 @@
 #include "parsid.h"
 #endif
 
+#ifdef HAVE_USBSID
+#include "usbsid.h"
+#endif
+
 static char *sid2_address_range = NULL;
 static char *sid3_address_range = NULL;
 static char *sid4_address_range = NULL;
@@ -62,11 +66,15 @@ static char *sid5_address_range = NULL;
 static char *sid6_address_range = NULL;
 static char *sid7_address_range = NULL;
 static char *sid8_address_range = NULL;
+static char *sid9_address_range = NULL;
+static char *sid10_address_range = NULL;
 
 struct engine_s {
     const char *name;
     int engine;
 };
+
+int sid_common_set_engine_model(const char *param, void *extra_param);
 
 static const struct engine_s engine_match[] = {
 #ifdef HAVE_FASTSID
@@ -111,6 +119,7 @@ static const struct engine_s engine_match[] = {
     { "hard", SID_HARDSID },
     { "hs", SID_HARDSID },
 #endif
+/* CAUTION: actually 3 "engines", one per LPT */
 #ifdef HAVE_PARSID
 #if !defined(WINDOWS_COMPILE) || (defined(WINDOWS_COMPILE) && defined(HAVE_LIBIEEE1284))
     { "1024", SID_PARSID },
@@ -119,8 +128,55 @@ static const struct engine_s engine_match[] = {
     { "lpt", SID_PARSID },
 #endif
 #endif
+#ifdef HAVE_USBSID
+    { "1792", SID_USBSID },
+    { "usbsid", SID_USBSID },
+    { "usbs", SID_USBSID },
+    { "us", SID_USBSID },
+#endif
+#ifdef HAVE_RESIDFP
+    { "2048", SID_RESIDFP_6581 },
+    { "residfp", SID_RESIDFP_6581 },
+    { "residfpold", SID_RESIDFP_6581 },
+    { "residfp6581", SID_RESIDFP_6581 },
+    { "2049", SID_RESIDFP_8580 },
+    { "residfpnew", SID_RESIDFP_8580 },
+    { "residfp8580", SID_RESIDFP_8580 },
+    { "2050", SID_RESIDFP_8580D },
+    { "residfpdigital", SID_RESIDFP_8580D },
+    { "residfpd", SID_RESIDFP_8580D },
+    { "residfpnewd", SID_RESIDFP_8580D },
+    { "residfp8580d", SID_RESIDFP_8580D },
+#endif
     { NULL, -1 }
 };
+
+#ifdef HAVE_USBSID
+int us_setparam(const char *param, void *extra_param)
+{
+    if ((!strcmp(((char *)extra_param), "rw")) && (strlen(param) >= 1)) {
+        int r = atoi(param);
+        resources_set_int("SidUSBSIDReadMode", r);
+        usbsid_set_readmode(r);
+    }
+    if ((!strcmp(((char *)extra_param), "audio")) && (strlen(param) >= 1)) {
+        int a = atoi(param);
+        resources_set_int("SidUSBSIDAudioMode", a);
+        usbsid_set_audiomode(a);
+    }
+    if ((!strcmp(((char *)extra_param), "diff")) && (strlen(param) >= 1)) {
+        int d = atoi(param);
+        resources_set_int("SidUSBSIDDiffSize", d);
+        usbsid_set_diffsize(d);
+    }
+    if ((!strcmp(((char *)extra_param), "buff")) && (strlen(param) >= 1)) {
+        int b = atoi(param);
+        resources_set_int("SidUSBSIDBufferSize", b);
+        usbsid_set_buffsize(b);
+    }
+    return 0;
+}
+#endif
 
 int sid_common_set_engine_model(const char *param, void *extra_param)
 {
@@ -166,7 +222,7 @@ static cmdline_option_t sidengine_cmdline_options[] =
     CMDLINE_LIST_END
 };
 
-#ifdef HAVE_RESID
+#if defined (HAVE_RESID) || defined (HAVE_RESIDFP)
 static cmdline_option_t siddtvengine_cmdline_options[] =
 {
     { "-sidenginemodel", CALL_FUNCTION, CMDLINE_ATTRIB_NEED_ARGS,
@@ -188,6 +244,7 @@ static const cmdline_option_t resid_cmdline_options[] =
     { "-residsamp", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
       NULL, NULL, "SidResidSampling", NULL,
       "<method>", "reSID sampling method (0: fast, 1: interpolating, 2: resampling, 3: fast resampling)" },
+#ifdef HAVE_RESID
     { "-residpass", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
       NULL, NULL, "SidResidPassband", NULL,
       "<percent>", "reSID resampling passband in percentage of total bandwidth (0 - 90)" },
@@ -210,11 +267,32 @@ static const cmdline_option_t resid_cmdline_options[] =
       NULL, NULL, "SidResidEnableRawOutput", (void *)1, NULL, "Enable writing raw reSID output to resid.raw, 16bit little endian data (WARNING: 1MiB per second)." },
     { "+residrawoutput", SET_RESOURCE, CMDLINE_ATTRIB_NONE,
       NULL, NULL, "SidResidEnableRawOutput", (void *)0, NULL, "Disable writing raw reSID output to resid.raw." },
+#endif
+#ifdef HAVE_RESIDFP
+    { "-resid6581oldcaps", SET_RESOURCE, CMDLINE_ATTRIB_NONE,
+      NULL, NULL, "SidResid6581OldCaps", (void *)1, NULL, "Use old 6581 2200pf caps." },
+    { "+resid6581oldcaps", SET_RESOURCE, CMDLINE_ATTRIB_NONE,
+      NULL, NULL, "SidResid6581OldCaps", (void *)0, NULL, "Do not use old 6581 2200pf caps." },
+    { "-resid6581filtercurve", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
+      NULL, NULL, "SidResid6581FilterCurve", NULL,
+      "<number>", "reSIDfp 6581 filter curve setting (0..1000).", },
+    { "-resid6581filterrange", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
+      NULL, NULL, "SidResid6581FilterRange", NULL,
+      "<number>", "reSIDfp 6581 filter range setting (0..1000).", },
+    { "-resid8580filtercurve", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
+      NULL, NULL, "SidResid8580FilterCurve", NULL,
+      "<number>", "reSIDfp 8580 filter curve setting (0..1000).", },
+    { "-residcombinedwaveformstrength", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
+      NULL, NULL, "SidResidCombinedWaveformStrength", NULL,
+      "<number>", "reSIDfp strength of combined waveforms (0..2).", },
+#endif
     CMDLINE_LIST_END
 };
 #endif
 
+
 #ifdef HAVE_HARDSID
+/* FIXME: options are not documented */
 static const cmdline_option_t hardsid_cmdline_options[] =
 {
     { "-hardsidmain", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
@@ -227,11 +305,31 @@ static const cmdline_option_t hardsid_cmdline_options[] =
 };
 #endif
 
+#ifdef HAVE_USBSID
+static const cmdline_option_t usbsid_cmdline_options[] =
+{
+
+    { "-usreadmode", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
+      NULL, NULL, "SidUSBSIDReadMode", NULL,
+      "<1 or 0>", "Enable USBSID-Pico read mode (disables cycled writing & digiplay)" },
+    { "-usaudiomode", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
+      NULL, NULL, "SidUSBSIDAudioMode", NULL,
+      "<1 or 0>", "Set USBSID-Pico PCB (v1.3) audio mode to Stereo (1) or Mono (0) (default)" },
+    { "-usdiffsize", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
+      NULL, NULL, "SidUSBSIDDiffSize", NULL,
+      "<number divisable by 8>", "Set USBSID-Pico write buffer head -> tail diff size (default: 64)" },
+    { "-usbuffsize", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
+      NULL, NULL, "SidUSBSIDBufferSize", NULL,
+      "<number divisable by 8>", "Set USBSID-Pico write buffer size (default: 8192)" },
+    CMDLINE_LIST_END
+};
+#endif
+
 static cmdline_option_t stereo_cmdline_options[] =
 {
     { "-sidextra", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
       NULL, NULL, "SidStereo", NULL,
-      "<amount>", "amount of extra SID chips. (0..3)" },
+      "<amount>", "amount of extra SID chips. (0..7)" },
     { "-sid2address", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
       NULL, NULL, "Sid2AddressStart", NULL,
       "<Base address>", NULL },
@@ -252,6 +350,12 @@ static cmdline_option_t stereo_cmdline_options[] =
       "<Base address>", NULL },
     { "-sid8address", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
       NULL, NULL, "Sid8AddressStart", NULL,
+      "<Base address>", NULL },
+    { "-sid9address", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
+      NULL, NULL, "Sid9AddressStart", NULL,
+      "<Base address>", NULL },
+    { "-sid10address", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
+      NULL, NULL, "Sid10AddressStart", NULL,
       "<Base address>", NULL },
     CMDLINE_LIST_END
 };
@@ -290,8 +394,15 @@ static char *generate_sid_address_range(int nr)
         case 7:
             temp3 = lib_strdup("Specify base address for 7th SID. (");
             break;
-        default:
+        case 8:
             temp3 = lib_strdup("Specify base address for 8th SID. (");
+            break;
+        case 9:
+            temp3 = lib_strdup("Specify base address for 9th SID. (");
+            break;
+        default:
+        case 10:
+            temp3 = lib_strdup("Specify base address for 10th SID. (");
             break;
     }
 
@@ -391,6 +502,24 @@ static char *build_sid_cmdline_option(int sid_type)
 #endif
 #endif
 
+#ifdef HAVE_USBSID
+    /* add usbsid options if available */
+    if (usbsid_available()) {
+        new = util_concat(old, ", 1792: USBSID-Pico", NULL);
+        lib_free(old);
+        old = new;
+    }
+#endif
+
+#ifdef HAVE_RESIDFP
+    /* add residfp options if available */
+    if (sid_type != SIDTYPE_SIDCART) {
+        new = util_concat(old, ", 2048: ReSIDfp 6581, 2049: ReSIDfp 8580, 2050: ReSIDfp 8580 + digiboost", NULL);
+        lib_free(old);
+        old = new;
+    }
+#endif
+
     /* add ending bracket */
     new = util_concat(old, ")", NULL);
     lib_free(old);
@@ -460,6 +589,24 @@ static char *build_sid_engine_cmdline_option(int sid_type)
 #endif
 #endif
 
+#ifdef HAVE_USBSID
+    /* add usbsid options if available */
+    if (usbsid_available()) {
+        new = util_concat(old, ", 7: USBSID-Pico", NULL);
+        lib_free(old);
+        old = new;
+    }
+#endif
+
+#ifdef HAVE_RESIDFP
+    /* add residfp options if available */
+    if (sid_type != SIDTYPE_SIDCART) {
+        new = util_concat(old, ", 8: ReSIDfp", NULL);
+        lib_free(old);
+        old = new;
+    }
+#endif
+
     /* add ending bracket */
     new = util_concat(old, ")", NULL);
     lib_free(old);
@@ -480,14 +627,12 @@ static char *build_sid_model_cmdline_option(int sid_type)
     /* start building up the command-line */
     old = lib_strdup("Specify SID model (");
 
-#if !defined(HAVE_RESID) && defined(HAVE_FASTSID)
+#if defined(HAVE_FASTSID) && !defined(HAVE_RESID) && !defined(HAVE_RESIDFP)
     /* add fast sid options */
     new = util_concat(old, "0: 6581, 1: 8580", NULL);
     lib_free(old);
     old = new;
-#endif
-
-#if defined(HAVE_RESID) && !defined(HAVE_FASTSID)
+#elif defined(HAVE_RESID) || defined(HAVE_RESIDFP)
     /* add resid options if available */
     if (sid_type != SIDTYPE_SIDCART) {
         new = util_concat(old, "0: 6581, 1: 8580, 2: 8580 + digiboost", NULL);
@@ -514,7 +659,7 @@ static char *build_sid_model_cmdline_option(int sid_type)
 
 int sid_cmdline_options_init(int sid_type)
 {
-#ifdef HAVE_RESID
+#if defined(HAVE_RESID) || defined(HAVE_RESIDFP)
     if (sid_type == SIDTYPE_SIDDTV) {
         siddtvengine_cmdline_options[0].description = build_sid_cmdline_option(SIDTYPE_SIDDTV);
         siddtvengine_cmdline_options[1].description = build_sid_engine_cmdline_option(SIDTYPE_SIDDTV);
@@ -539,8 +684,14 @@ int sid_cmdline_options_init(int sid_type)
     }
 #endif
 
-#ifdef HAVE_RESID
+#if defined(HAVE_RESID) || defined(HAVE_RESIDFP)
     if (cmdline_register_options(resid_cmdline_options) < 0) {
+        return -1;
+    }
+#endif
+
+#ifdef HAVE_USBSID
+    if (cmdline_register_options(usbsid_cmdline_options) < 0) {
         return -1;
     }
 #endif
@@ -567,6 +718,8 @@ int sid_cmdline_options_init(int sid_type)
         sid6_address_range = generate_sid_address_range(6);
         sid7_address_range = generate_sid_address_range(7);
         sid8_address_range = generate_sid_address_range(8);
+        sid9_address_range = generate_sid_address_range(9);
+        sid10_address_range = generate_sid_address_range(10);
 
         stereo_cmdline_options[1].description = sid2_address_range;
         stereo_cmdline_options[2].description = sid3_address_range;
@@ -575,7 +728,8 @@ int sid_cmdline_options_init(int sid_type)
         stereo_cmdline_options[5].description = sid6_address_range;
         stereo_cmdline_options[6].description = sid7_address_range;
         stereo_cmdline_options[7].description = sid8_address_range;
-
+        stereo_cmdline_options[8].description = sid9_address_range;
+        stereo_cmdline_options[9].description = sid10_address_range;
 
         if (cmdline_register_options(stereo_cmdline_options) < 0) {
             return -1;
@@ -586,14 +740,17 @@ int sid_cmdline_options_init(int sid_type)
 
 void sid_cmdline_options_shutdown(void)
 {
+    /* sidengine_cmdline_options[0].description */
     if (sid_return) {
         lib_free(sid_return);
         sid_return = NULL;
     }
+    /* sidengine_cmdline_options[1].description */
     if (sid_return_engine) {
         lib_free(sid_return_engine);
         sid_return_engine = NULL;
     }
+    /* sidengine_cmdline_options[2].description */
     if (sid_return_model) {
         lib_free(sid_return_model);
         sid_return_model = NULL;
@@ -625,5 +782,13 @@ void sid_cmdline_options_shutdown(void)
     if (sid8_address_range) {
         lib_free(sid8_address_range);
         sid8_address_range = NULL;
+    }
+    if (sid9_address_range) {
+        lib_free(sid9_address_range);
+        sid9_address_range = NULL;
+    }
+    if (sid10_address_range) {
+        lib_free(sid10_address_range);
+        sid10_address_range = NULL;
     }
 }

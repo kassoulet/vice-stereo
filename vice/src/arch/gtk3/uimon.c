@@ -53,6 +53,7 @@
 #define VTE_TERMINAL(x) NOVTE_TERMINAL(x)
 #define VteTerminal NoVteTerminal
 
+#include <pango/pangocairo.h>
 #include <dirent.h>
 #include <ctype.h>
 #include <unistd.h>
@@ -80,6 +81,14 @@
 #include "vsyncapi.h"
 #include "widgethelpers.h"
 #include "uidata.h"
+
+/*#define DEBUG_UIMON*/
+
+#ifdef DEBUG_UIMON
+#define DBG(x)  log_printf
+#else
+#define DBG(x)
+#endif
 
 static gboolean uimon_window_open_impl(gpointer user_data);
 static gboolean uimon_window_resume_impl(gpointer user_data);
@@ -161,6 +170,11 @@ void uimon_write_to_terminal(struct console_private_s *t,
     size_t output_buffer_required_size;
     bool write_scheduled = false;
 
+    /* early exit when length is 0 (the following code does not handle it) */
+    if (length == 0) {
+        return;
+    }
+
     pthread_mutex_lock(&fixed.lock);
 
     /*
@@ -227,7 +241,7 @@ int uimon_out(const char *buffer)
 int uimon_petscii_out(const char *buffer, int len)
 {
     unsigned char *utf = NULL;
-    uint8_t b;
+    uint8_t b[2] = { 0 , 0};
     int n = 0;
     uint8_t c;
 
@@ -275,12 +289,12 @@ int uimon_petscii_out(const char *buffer, int len)
                 if (c == 0) {
                     /* 0 is a petscii control code, which we display as inverted @ */
                     c = '@';
-                    b = c;
-                    utf = vice_gtk3_petscii_to_utf8(&b, true, true);
+                    b[0] = c;
+                    utf = vice_gtk3_petscii_to_utf8(b, true, true);
                     uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
                 } else {
-                    b = c;
-                    utf = vice_gtk3_petscii_to_utf8(&b, false, true);
+                    b[0] = c;
+                    utf = vice_gtk3_petscii_to_utf8(b, false, true);
                     uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
                 }
             }
@@ -288,24 +302,24 @@ int uimon_petscii_out(const char *buffer, int len)
             if (c == 0) {
                 /* 0 is a petscii control code, which we display as inverted @ */
                 c = '@';
-                b = c;
-                utf = vice_gtk3_petscii_to_utf8_petme(&b, true, true);
+                b[0] = c;
+                utf = vice_gtk3_petscii_to_utf8_petme(b, true, true);
                 uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
             } else {
-                b = c;
-                utf = vice_gtk3_petscii_to_utf8_petme(&b, false, true);
+                b[0] = c;
+                utf = vice_gtk3_petscii_to_utf8_petme(b, false, true);
                 uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
             }
         } else if (font_type == FONT_TYPE_PETME64) {
             if (c == 0) {
                 /* 0 is a petscii control code, which we display as inverted @ */
                 c = '@';
-                b = c;
-                utf = vice_gtk3_petscii_to_utf8_petme64(&b, true, true);
+                b[0] = c;
+                utf = vice_gtk3_petscii_to_utf8_petme64(b, true, true);
                 uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
             } else {
-                b = c;
-                utf = vice_gtk3_petscii_to_utf8_petme64(&b, false, true);
+                b[0] = c;
+                utf = vice_gtk3_petscii_to_utf8_petme64(b, false, true);
                 uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
             }
         }
@@ -325,7 +339,7 @@ int uimon_petscii_out(const char *buffer, int len)
 int uimon_petscii_upper_out(const char *buffer, int len)
 {
     unsigned char *utf = NULL;
-    uint8_t b;
+    uint8_t b[2] = { 0 , 0};
     int n = 0;
     uint8_t c;
 
@@ -370,12 +384,12 @@ int uimon_petscii_upper_out(const char *buffer, int len)
                 if (c == 0) {
                     /* 0 is a petscii control code, which we display as inverted @ */
                     c = '@';
-                    b = c;
-                    utf = vice_gtk3_petscii_upper_to_utf8(&b, true);
+                    b[0] = c;
+                    utf = vice_gtk3_petscii_upper_to_utf8(b, true);
                     uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
                 } else {
-                    b = c;
-                    utf = vice_gtk3_petscii_upper_to_utf8(&b, false);
+                    b[0] = c;
+                    utf = vice_gtk3_petscii_upper_to_utf8(b, false);
                     uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
                 }
             }
@@ -384,12 +398,12 @@ int uimon_petscii_upper_out(const char *buffer, int len)
             if (c == 0) {
                 /* 0 is a petscii control code, which we display as inverted @ */
                 c = '@';
-                b = c;
-                utf = vice_gtk3_petscii_upper_to_utf8_petme(&b, true);
+                b[0] = c;
+                utf = vice_gtk3_petscii_upper_to_utf8_petme(b, true);
                 uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
             } else {
-                b = c;
-                utf = vice_gtk3_petscii_upper_to_utf8_petme(&b, false);
+                b[0] = c;
+                utf = vice_gtk3_petscii_upper_to_utf8_petme(b, false);
                 uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
             }
         } else if (font_type == FONT_TYPE_PETME64) {
@@ -397,12 +411,12 @@ int uimon_petscii_upper_out(const char *buffer, int len)
             if (c == 0) {
                 /* 0 is a petscii control code, which we display as inverted @ */
                 c = '@';
-                b = c;
-                utf = vice_gtk3_petscii_upper_to_utf8_petme64(&b, true);
+                b[0] = c;
+                utf = vice_gtk3_petscii_upper_to_utf8_petme64(b, true);
                 uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
             } else {
-                b = c;
-                utf = vice_gtk3_petscii_upper_to_utf8_petme64(&b, false);
+                b[0] = c;
+                utf = vice_gtk3_petscii_upper_to_utf8_petme64(b, false);
                 uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
             }
         }
@@ -424,7 +438,7 @@ int uimon_scrcode_out(const char *buffer, int len)
 {
     int n = 0;
     unsigned char *utf = NULL;
-    uint8_t b;
+    uint8_t b[2] = { 0 , 0};
     uint8_t c;
 
     if (native_monitor()) {
@@ -440,34 +454,34 @@ int uimon_scrcode_out(const char *buffer, int len)
             c = charset_p_toascii(c, CONVERT_WITH_CTRLCODES);
         } else if (font_type == FONT_TYPE_C64PRO) {
             /* regular PETSCII capable ("C64 Pro") font */
-            b = c;
+            b[0] = c;
             if (c == 0x00) {
-                b = '@';    /* Hack, this way we sneak the 0 in there */
-                utf = vice_gtk3_petscii_to_utf8(&b, c & 0x80 ? true : false, true);
+                b[0] = '@';    /* Hack, this way we sneak the 0 in there */
+                utf = vice_gtk3_petscii_to_utf8(b, c & 0x80 ? true : false, true);
             } else {
-                utf = vice_gtk3_scrcode_to_utf8(&b, c & 0x80 ? true : false, true);
+                utf = vice_gtk3_scrcode_to_utf8(b, c & 0x80 ? true : false, true);
             }
             uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
         } else if (font_type == FONT_TYPE_PETME) {
             /* FIXME: regular PETSCII capable ("PET Me") font */
             int ch = c & 0x7f;
-            b = ch;
+            b[0] = ch;
             if (ch == 0x00) {
-                b = '@';    /* Hack, this way we sneak the 0 in there */
-                utf = vice_gtk3_petscii_to_utf8_petme(&b, c & 0x80 ? true : false, true);
+                b[0] = '@';    /* Hack, this way we sneak the 0 in there */
+                utf = vice_gtk3_petscii_to_utf8_petme(b, c & 0x80 ? true : false, true);
             } else {
-                utf = vice_gtk3_scrcode_to_utf8_petme(&b, c & 0x80 ? true : false, true);
+                utf = vice_gtk3_scrcode_to_utf8_petme(b, c & 0x80 ? true : false, true);
             }
             uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
         } else if (font_type == FONT_TYPE_PETME64) {
             /* FIXME: regular PETSCII capable ("PET Me") font */
             int ch = c & 0x7f;
-            b = ch;
+            b[0] = ch;
             if (ch == 0x00) {
-                b = '@';    /* Hack, this way we sneak the 0 in there */
-                utf = vice_gtk3_petscii_to_utf8_petme64(&b, c & 0x80 ? true : false, true);
+                b[0] = '@';    /* Hack, this way we sneak the 0 in there */
+                utf = vice_gtk3_petscii_to_utf8_petme64(b, c & 0x80 ? true : false, true);
             } else {
-                utf = vice_gtk3_scrcode_to_utf8_petme64(&b, c & 0x80 ? true : false, true);
+                utf = vice_gtk3_scrcode_to_utf8_petme64(b, c & 0x80 ? true : false, true);
             }
             uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
         }
@@ -488,7 +502,7 @@ int uimon_scrcode_upper_out(const char *buffer, int len)
 {
     int n = 0;
     unsigned char *utf = NULL;
-    uint8_t b;
+    uint8_t b[2] = { 0 , 0};
     uint8_t c;
 
     if (native_monitor()) {
@@ -504,34 +518,34 @@ int uimon_scrcode_upper_out(const char *buffer, int len)
             c = charset_p_toascii(c, CONVERT_WITH_CTRLCODES);
         } else if (font_type == FONT_TYPE_C64PRO) {
             /* regular PETSCII capable ("C64 Pro") font */
-            b = c;
+            b[0] = c;
             if (c == 0x00) {
-                b = '@';    /* Hack, this way we sneak the 0 in there */
-                utf = vice_gtk3_petscii_upper_to_utf8(&b, c & 0x80 ? true : false);
+                b[0] = '@';    /* Hack, this way we sneak the 0 in there */
+                utf = vice_gtk3_petscii_upper_to_utf8(b, c & 0x80 ? true : false);
             } else {
-                utf = vice_gtk3_scrcode_upper_to_utf8(&b, c & 0x80 ? true : false);
+                utf = vice_gtk3_scrcode_upper_to_utf8(b, c & 0x80 ? true : false);
             }
             uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
         } else if (font_type == FONT_TYPE_PETME) {
             /* FIXME: regular PETSCII capable ("PET Me") font */
             int ch = c & 0x7f;
-            b = ch;
+            b[0] = ch;
             if (ch == 0x00) {
-                b = '@';    /* Hack, this way we sneak the 0 in there */
-                utf = vice_gtk3_petscii_upper_to_utf8_petme(&b, c & 0x80 ? true : false);
+                b[0] = '@';    /* Hack, this way we sneak the 0 in there */
+                utf = vice_gtk3_petscii_upper_to_utf8_petme(b, c & 0x80 ? true : false);
             } else {
-                utf = vice_gtk3_scrcode_upper_to_utf8_petme(&b, c & 0x80 ? true : false);
+                utf = vice_gtk3_scrcode_upper_to_utf8_petme(b, c & 0x80 ? true : false);
             }
             uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
         } else if (font_type == FONT_TYPE_PETME64) {
             /* FIXME: regular PETSCII capable ("PET Me") font */
             int ch = c & 0x7f;
-            b = ch;
+            b[0] = ch;
             if (ch == 0x00) {
-                b = '@';    /* Hack, this way we sneak the 0 in there */
-                utf = vice_gtk3_petscii_upper_to_utf8_petme64(&b, c & 0x80 ? true : false);
+                b[0] = '@';    /* Hack, this way we sneak the 0 in there */
+                utf = vice_gtk3_petscii_upper_to_utf8_petme64(b, c & 0x80 ? true : false);
             } else {
-                utf = vice_gtk3_scrcode_upper_to_utf8_petme64(&b, c & 0x80 ? true : false);
+                utf = vice_gtk3_scrcode_upper_to_utf8_petme64(b, c & 0x80 ? true : false);
             }
             uimon_write_to_terminal(&fixed, (const char*)&utf[0], 3);
         }
@@ -1120,6 +1134,26 @@ static PangoFontDescription* getfontdesc(const char *name)
     return desc;
 }
 
+static bool font_family_exists(const PangoFontDescription *desc)
+{
+    PangoFontMap *fontmap;
+    PangoFontFamily *family;
+    const char *family_name;
+
+    family_name = pango_font_description_get_family(desc);
+    if (family_name == NULL) {
+        return false;
+    }
+
+    fontmap = pango_cairo_font_map_get_default();
+    if (fontmap == NULL) {
+        return false;
+    }
+
+    family = pango_font_map_get_family(fontmap, family_name);
+    return family != NULL;
+}
+
 bool uimon_set_font(void)
 {
     const PangoFontDescription *desc_tmp;
@@ -1150,12 +1184,21 @@ bool uimon_set_font(void)
 
     /* try to set monitor font */
     desc = getfontdesc(monitor_font);
+    if (desc != NULL && !font_family_exists(desc)) {
+        pango_font_description_free(desc);
+        desc = NULL;
+    }
     if (desc == NULL) {
         /* fall back */
 
         /* if we didn't try to set the default C64 font, try it now */
         if (!strcmp("C64 Pro", monitor_font)) {
             desc = getfontdesc("C64 Pro Mono Regular 9");
+        }
+
+        if (desc != NULL && !font_family_exists(desc)) {
+            pango_font_description_free(desc);
+            desc = NULL;
         }
 
         if (desc == NULL) {
@@ -1170,14 +1213,17 @@ bool uimon_set_font(void)
 
     desc_tmp = vte_terminal_get_font(VTE_TERMINAL(fixed.term));
     using_font = pango_font_description_to_string(desc_tmp);
-    if(!strncasecmp("c64 pro", using_font, 7)) {
+    /* pango_font_description_from_string() never fails for unknown font names,
+     * it just returns a description that Pango/VTE will silently substitute.
+     * Verify the family actually exists before enabling PETSCII. */
+    if(!strncasecmp("c64 pro", using_font, 7) && font_family_exists(desc_tmp)) {
         log_message(monui_log, "'C64 Pro*' font found, enabling PETSCII output.");
         font_type = FONT_TYPE_C64PRO;
-    } else if(!strncasecmp("pet me 64", using_font, 9) ||
-              !strncasecmp("pet me 128", using_font, 10)) {
+    } else if((!strncasecmp("pet me 64", using_font, 9) ||
+               !strncasecmp("pet me 128", using_font, 10)) && font_family_exists(desc_tmp)) {
         log_message(monui_log, "'PET Me 64/128*' font found, enabling PETSCII output.");
         font_type = FONT_TYPE_PETME64;
-    } else if(!strncasecmp("pet me", using_font, 6)) {
+    } else if(!strncasecmp("pet me", using_font, 6) && font_family_exists(desc_tmp)) {
         log_message(monui_log, "'PET Me*' font found, enabling PETSCII output.");
         font_type = FONT_TYPE_PETME;
     }
@@ -1268,6 +1314,26 @@ bool uimon_set_background_color(const char *color)
     return false;
 }
 
+static void mon_set_pos(int xpos, int ypos)
+{
+    DBG(("mon_set_pos window xpos:%3d ypos:%3d", xpos, ypos));
+    if ((xpos == INT_MIN) || (ypos == INT_MIN)) {
+        /* Only center if we didn't get either a previous position or
+            * the position was set via the command line.
+            */
+        gtk_window_set_position(GTK_WINDOW(fixed.window), GTK_WIN_POS_CENTER);
+    } else {
+        gtk_window_move(GTK_WINDOW(fixed.window), xpos, ypos);
+    }
+}
+
+static void mon_set_size(int width, int height)
+{
+    DBG(("mon_set_size window resize width:%3d height:%3d", width, height));
+    if ((width > 0) && (height > 0)) {
+        gtk_window_resize(GTK_WINDOW(fixed.window), width, height);
+    }
+}
 
 static gboolean uimon_window_open_impl(gpointer user_data)
 {
@@ -1278,6 +1344,8 @@ static gboolean uimon_window_open_impl(gpointer user_data)
     int sblines;
     int xpos = INT_MIN;
     int ypos = INT_MIN;
+    int height = 0;
+    int width = 0;
 
     pthread_mutex_lock(&fixed.lock);
 
@@ -1289,12 +1357,14 @@ static gboolean uimon_window_open_impl(gpointer user_data)
 
         resources_get_int("MonitorXPos", &xpos);
         resources_get_int("MonitorYPos", &ypos);
-        if (xpos == INT_MIN || ypos == INT_MIN) {
-            /* Only center if we didn't get either a previous position or
-             * the position was set via the command line.
-             */
-            gtk_window_set_position(GTK_WINDOW(fixed.window), GTK_WIN_POS_CENTER);
-        }
+        resources_get_int("MonitorHeight", &height);
+        resources_get_int("MonitorWidth",  &width);
+        DBG(("uimon_window_open_impl window xpos:%3d ypos:%3d width:%3d height:%3d",
+             xpos, ypos, width, height));
+
+        mon_set_pos(xpos, ypos);
+        mon_set_size(width, height);
+
         /* Set the gravity so that gtk doesn't over-compensate for the
          * window's border width when saving/restoring its position. */
         gtk_window_set_gravity(GTK_WINDOW(fixed.window), GDK_GRAVITY_STATIC);
@@ -1322,6 +1392,7 @@ static gboolean uimon_window_open_impl(gpointer user_data)
         /* base size should be multiple of .._inc, else we get funky effects */
         hints.base_width = hints.width_inc;
         hints.base_height = hints.height_inc;
+        DBG(("uimon_window_open_impl font width:%3d height:%3d", hints.width_inc, hints.height_inc));
         gtk_window_set_geometry_hints (GTK_WINDOW (fixed.window),
                                      fixed.term,
                                      &hints,
@@ -1331,7 +1402,10 @@ static gboolean uimon_window_open_impl(gpointer user_data)
                                      GDK_HINT_USER_POS |
                                      GDK_HINT_USER_SIZE);
 
-        vte_terminal_set_size(VTE_TERMINAL(fixed.term), DEFAULT_COLUMNS, DEFAULT_ROWS);
+        if ((xpos == INT_MIN) || (ypos == INT_MIN)) {
+            DBG(("uimon_window_open_impl set vte size to defaults"));
+            vte_terminal_set_size(VTE_TERMINAL(fixed.term), DEFAULT_COLUMNS, DEFAULT_ROWS);
+        }
 
         scrollbar = gtk_scrollbar_new(GTK_ORIENTATION_VERTICAL,
                 gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(fixed.term)));
@@ -1376,6 +1450,7 @@ static gboolean uimon_window_open_impl(gpointer user_data)
                                   NULL);
 
         vte_console.console_can_stay_open = 1;
+        vte_console.console_cannot_output = 0;
 
         uimon_set_font();
     } else {
@@ -1390,31 +1465,32 @@ static gboolean uimon_window_open_impl(gpointer user_data)
 
     /* Ensure any queued monitor output is displayed */
     gdk_threads_add_timeout(0, write_to_terminal, NULL);
-
     return FALSE;
 }
 
 static gboolean uimon_window_resume_impl(gpointer user_data)
 {
-    int xpos;
-    int ypos;
-    int height;
-    int width;
+    int xpos = INT_MIN;
+    int ypos = INT_MIN;
+    int height = 0;
+    int width = 0;
 
     resources_get_int("MonitorXPos",   &xpos);
     resources_get_int("MonitorYPos",   &ypos);
     resources_get_int("MonitorHeight", &height);
     resources_get_int("MonitorWidth",  &width);
+    DBG(("uimon_window_resume_impl window xpos:%3d ypos:%3d width:%3d height:%3d",
+         xpos, ypos, width, height));
 
     gtk_widget_show_all(fixed.window);
     on_term_text_modified(VTE_TERMINAL(fixed.term), NULL);
 
-    if (xpos > INT_MIN && ypos > INT_MIN) {
-        gtk_window_move(GTK_WINDOW(fixed.window), xpos, ypos);
-    }
-    if (width >= 0 && height >= 0) {
-        gtk_window_resize(GTK_WINDOW(fixed.window), width, height);
-    }
+    mon_set_pos(xpos, ypos);
+
+#if 0
+    /* BUG: this makes it hang first time the monitor window is opened */
+    mon_set_size(height, width);
+#endif
 
     /*
      * Make the monitor window appear on top of the active emulated machine
@@ -1422,7 +1498,6 @@ static gboolean uimon_window_resume_impl(gpointer user_data)
      * window is in fullscreen mode. (only tested on Windows 10)
      */
     gtk_window_present(GTK_WINDOW(fixed.window));
-
     return FALSE;
 }
 

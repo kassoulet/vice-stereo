@@ -133,7 +133,7 @@ static int c128_hide_vdc;
 int cia1_model = CIA_MODEL_6526A;
 int cia2_model = CIA_MODEL_6526A;
 
-static int board_type = BOARD_C128D;
+int board_type = BOARD_C128D;
 
 static int set_c128_full_banks(int val, void *param)
 {
@@ -178,7 +178,7 @@ static int set_machine_type(int val, void *param)
 static int set_board_type(int val, void *param)
 {
     int old_board_type = board_type;
-    if ((val < 0) || (val > 1)) {
+    if ((val < BOARD_C128) || (val > BOARD_LAST)) {
         return -1;
     }
     board_type = val;
@@ -466,7 +466,15 @@ static int set_basiclo_rom_name(const char *val, void *param)
         return 0;
     }
 
-    return c128rom_load_basiclo(basiclo_rom_name);
+    if (c128rom_load_basiclo(basiclo_rom_name) < 0) {
+        return -1;
+    }
+
+    if (c128rom_basic_setup() < 0) {
+        return -1;
+    }
+
+    return 0;
 }
 
 static int set_basichi_rom_name(const char *val, void *param)
@@ -475,16 +483,36 @@ static int set_basichi_rom_name(const char *val, void *param)
         return 0;
     }
 
-    return c128rom_load_basichi(basichi_rom_name);
+    if (c128rom_load_basichi(basichi_rom_name) < 0) {
+        return -1;
+    }
+
+    if (c128rom_basic_setup() < 0) {
+        return -1;
+    }
+
+    return 0;
 }
 
+/*
+ * sets up "Kernal64Name" (kernal64_rom_name)
+ */
 static int set_kernal64_rom_name(const char *val, void *param)
 {
+    if (c128rom_load_kernal64(val) < 0) {
+        return -1;
+    }
+
+    /* set resource name (only when load succeeded) */
     if (util_string_set(&kernal64_rom_name, val)) {
         return 0;
     }
 
-    return c128rom_load_kernal64(kernal64_rom_name, NULL);
+    if (c128rom_kernal64_setup() < 0) {
+        return -1;
+    }
+
+    return 0;
 }
 
 static int set_basic64_rom_name(const char *val, void *param)
@@ -493,7 +521,15 @@ static int set_basic64_rom_name(const char *val, void *param)
         return 0;
     }
 
-    return c128rom_load_basic64(basic64_rom_name);
+    if (c128rom_load_basic64(basic64_rom_name) < 0) {
+        return -1;
+    }
+
+    if (c128rom_basic64_setup() < 0) {
+        return -1;
+    }
+
+    return 0;
 }
 
 static int set_cia1_model(int val, void *param)
@@ -694,21 +730,23 @@ int c128_resources_init(void)
 void c128_resources_shutdown(void)
 {
     lib_free(chargen_int_rom_name);
-    lib_free(chargen_de_rom_name);
-    lib_free(chargen_fr_rom_name);
-    lib_free(chargen_se_rom_name);
     lib_free(chargen_ch_rom_name);
+    lib_free(chargen_de_rom_name);
+    lib_free(chargen_fi_rom_name);
+    lib_free(chargen_fr_rom_name);
+    lib_free(chargen_it_rom_name);
     lib_free(chargen_no_rom_name);
+    lib_free(chargen_se_rom_name);
     lib_free(basiclo_rom_name);
     lib_free(basichi_rom_name);
+    lib_free(kernal64_rom_name);
+    lib_free(basic64_rom_name);
     lib_free(kernal_int_rom_name);
+    lib_free(kernal_ch_rom_name);
     lib_free(kernal_de_rom_name);
     lib_free(kernal_fi_rom_name);
     lib_free(kernal_fr_rom_name);
     lib_free(kernal_it_rom_name);
     lib_free(kernal_no_rom_name);
     lib_free(kernal_se_rom_name);
-    lib_free(kernal_ch_rom_name);
-    lib_free(basic64_rom_name);
-    lib_free(kernal64_rom_name);
 }

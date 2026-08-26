@@ -1536,10 +1536,19 @@ void mem_read_tab_set(unsigned int base, unsigned int index, read_func_ptr_t rea
     mem_read_tab[base][index] = read_func;
 }
 
+/* set c128 base */
 void mem_read_base_set(unsigned int base, unsigned int index, uint8_t *mem_ptr)
 {
     mem_read_base_tab[base][index] = mem_ptr;
 }
+
+#if 0
+/* add actual pointer */
+void mem_read_addr_set(unsigned int base, unsigned int index, uintptr_t addr)
+{
+    mem_read_base_tab[base][index] += addr;
+}
+#endif
 
 void mem_read_limit_set(unsigned int base, unsigned int index, uint32_t limit)
 {
@@ -1672,6 +1681,8 @@ void mem_initialize_memory(void)
     /* Setup character generator ROM at $D000-$DFFF (memory configs 1, 2,
        3, 9, 10, 11, 26, 27).  */
     for (i = 0xd0; i <= 0xdf; i++) {
+        /*uintptr_t addr = 0 - 0xd000;*/
+
         mem_read_tab[base + 1][i] = chargen_read;
         mem_read_tab[base + 2][i] = chargen_read;
         mem_read_tab[base + 3][i] = chargen_read;
@@ -1680,14 +1691,34 @@ void mem_initialize_memory(void)
         mem_read_tab[base + 11][i] = chargen_read;
         mem_read_tab[base + 26][i] = chargen_read;
         mem_read_tab[base + 27][i] = chargen_read;
-        mem_read_base_tab[base + 1][i] = (uint8_t *)(mem_chargen_rom - (uint8_t *)0xd000);
-        mem_read_base_tab[base + 2][i] = (uint8_t *)(mem_chargen_rom - (uint8_t *)0xd000);
-        mem_read_base_tab[base + 3][i] = (uint8_t *)(mem_chargen_rom - (uint8_t *)0xd000);
-        mem_read_base_tab[base + 9][i] = (uint8_t *)(mem_chargen_rom - (uint8_t *)0xd000);
-        mem_read_base_tab[base + 10][i] = (uint8_t *)(mem_chargen_rom - (uint8_t *)0xd000);
-        mem_read_base_tab[base + 11][i] = (uint8_t *)(mem_chargen_rom - (uint8_t *)0xd000);
-        mem_read_base_tab[base + 26][i] = (uint8_t *)(mem_chargen_rom - (uint8_t *)0xd000);
-        mem_read_base_tab[base + 27][i] = (uint8_t *)(mem_chargen_rom - (uint8_t *)0xd000);
+#if 1
+        mem_read_base_tab[base + 1][i] = (uint8_t *)((uintptr_t)mem_chargen_rom - (uintptr_t)0xd000);
+        mem_read_base_tab[base + 2][i] = (uint8_t *)((uintptr_t)mem_chargen_rom - (uintptr_t)0xd000);
+        mem_read_base_tab[base + 3][i] = (uint8_t *)((uintptr_t)mem_chargen_rom - (uintptr_t)0xd000);
+        mem_read_base_tab[base + 9][i] = (uint8_t *)((uintptr_t)mem_chargen_rom - (uintptr_t)0xd000);
+        mem_read_base_tab[base + 10][i] = (uint8_t *)((uintptr_t)mem_chargen_rom - (uintptr_t)0xd000);
+        mem_read_base_tab[base + 11][i] = (uint8_t *)((uintptr_t)mem_chargen_rom - (uintptr_t)0xd000);
+        mem_read_base_tab[base + 26][i] = (uint8_t *)((uintptr_t)mem_chargen_rom - (uintptr_t)0xd000);
+        mem_read_base_tab[base + 27][i] = (uint8_t *)((uintptr_t)mem_chargen_rom - (uintptr_t)0xd000);
+#else
+        mem_read_base_set(base + 1, i, (uint8_t*)addr);
+        mem_read_base_set(base + 2, i, (uint8_t*)addr);
+        mem_read_base_set(base + 3, i, (uint8_t*)addr);
+        mem_read_base_set(base + 9, i, (uint8_t*)addr);
+        mem_read_base_set(base + 10, i, (uint8_t*)addr);
+        mem_read_base_set(base + 11, i, (uint8_t*)addr);
+        mem_read_base_set(base + 26, i, (uint8_t*)addr);
+        mem_read_base_set(base + 27, i, (uint8_t*)addr);
+
+        mem_read_addr_set(base + 1, i, (uintptr_t)mem_chargen_rom);
+        mem_read_addr_set(base + 2, i, (uintptr_t)mem_chargen_rom);
+        mem_read_addr_set(base + 3, i, (uintptr_t)mem_chargen_rom);
+        mem_read_addr_set(base + 9, i, (uintptr_t)mem_chargen_rom);
+        mem_read_addr_set(base + 10, i, (uintptr_t)mem_chargen_rom);
+        mem_read_addr_set(base + 11, i, (uintptr_t)mem_chargen_rom);
+        mem_read_addr_set(base + 26, i, (uintptr_t)mem_chargen_rom);
+        mem_read_addr_set(base + 27, i, (uintptr_t)mem_chargen_rom);
+#endif
     }
 
     c64meminit(base);
@@ -1768,6 +1799,10 @@ void mem_initialize_memory(void)
     mem_read_limit_tab_ptr = mem_read_limit_tab[base];
 
     c64pla_pport_reset();
+    /* the next function needs to be called to update the pport.data_read so
+       that it reflects the impact the external pull up resistors have.
+       fix for bug #2121. */
+    mem_pla_config_changed();
 
     cartridge_init_config();
 }
@@ -2884,12 +2919,12 @@ mem_ioreg_list_t *mem_ioreg_list_get(void *context)
 {
     mem_ioreg_list_t *mem_ioreg_list = NULL;
 
-    io_source_ioreg_add_list(&mem_ioreg_list);  /* VIC-IIe, SID first so it's in address order */
+    io_source_ioreg_add_list(&mem_ioreg_list);  /* VIC-IIe, SID, VDC & CIA2 */
 
     mon_ioreg_add_list(&mem_ioreg_list, "MMU", 0xd500, 0xd50b, mmu_dump, NULL, IO_MIRROR_NONE);
     /*mon_ioreg_add_list(&mem_ioreg_list, "VDC", 0xd600, 0xd601, vdc_dump, NULL, IO_MIRROR_NONE);*/
     mon_ioreg_add_list(&mem_ioreg_list, "CIA1", 0xdc00, 0xdc0f, mem_dump_io, NULL, IO_MIRROR_NONE);
-    mon_ioreg_add_list(&mem_ioreg_list, "CIA2", 0xdd00, 0xdd0f, mem_dump_io, NULL, IO_MIRROR_NONE);
+    /*mon_ioreg_add_list(&mem_ioreg_list, "CIA2", 0xdd00, 0xdd0f, mem_dump_io, NULL, IO_MIRROR_NONE);*/
 
     return mem_ioreg_list;
 }

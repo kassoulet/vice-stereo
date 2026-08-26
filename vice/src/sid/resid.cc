@@ -28,6 +28,8 @@
 
 #include "vice.h"
 
+#if defined(HAVE_RESID) || defined(HAVE_RESID_DTV)
+
 #ifdef _M_ARM
 #undef _ARM_WINAPI_PARTITION_DESKTOP_SDK_AVAILABLE
 #define _ARM_WINAPI_PARTITION_DESKTOP_SDK_AVAILABLE 1
@@ -44,6 +46,14 @@ extern "C" {
 #include "resources.h"
 #include "sid-snapshot.h"
 #include "types.h"
+
+/*#define DEBUG_RESID*/
+
+#ifdef DEBUG_RESID
+#define DBG(x)  log_printf x
+#else
+#define DBG(x)
+#endif
 
 extern log_t sound_log;
 
@@ -89,7 +99,7 @@ static sound_t *resid_open(uint8_t *sidstate)
 {
     sound_t *psid;
     int i;
-
+    DBG(("resid_open"));
     psid = new sound_t;
     psid->sid = new reSID::SID;
 
@@ -108,6 +118,7 @@ static int resid_init(sound_t *psid, int speed, int cycles_per_sec, int factor)
     double passband, gain;
     int filters_enabled, model, sampling, passband_percentage, gain_percentage, filter_bias_mV;
     int rawoutput;
+    DBG(("resid_init"));
 
     if (resources_get_int("SidFilters", &filters_enabled) < 0) {
         return 0;
@@ -305,15 +316,17 @@ static int resid_calculate_samples(sound_t *psid, short *pbuf, int nr, int inter
     /* Tried not to mess with resid during 64-bit conversion. clock(...) wants to modify *delta_t ... */
 
     if (psid->factor == 1000) {
+        /* CAUTION: modifies int_delta_t so it contains "cycles left to do" after exit (usually 0) */
         retval = psid->sid->clock(int_delta_t, pbuf, nr, interleave);
         (*delta_t) += int_delta_t - int_delta_t_original;
         return retval;
     }
 
+    /* Used when SID does not run at system clock ("SID card") */
     tmp_buf = getbuf(2 * nr * psid->factor / 1000);
-    retval = psid->sid->clock(int_delta_t, tmp_buf, nr * psid->factor / 1000, interleave) * 1000 / psid->factor;
+    retval = psid->sid->clock(int_delta_t, tmp_buf, nr * psid->factor / 1000, interleave);
     (*delta_t) += int_delta_t - int_delta_t_original;
-    memcpy(pbuf, tmp_buf, 2 * nr);
+    memcpy(pbuf, tmp_buf, retval * 2);
 
     return retval;
 }
@@ -450,3 +463,5 @@ sid_engine_t resid_hooks =
 };
 
 } // extern "C"
+
+#endif

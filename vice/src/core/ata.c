@@ -105,24 +105,29 @@ struct ata_drive_s {
 };
 
 static const uint8_t identify[128] = {
+    // 0x00
     0x40, 0x00, 0x00, 0x01, 0x00, 0x00, 0x04, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x30, 0x32, 0x31, 0x31,
     0x38, 0x30, 0x30, 0x32, 0x20, 0x20, 0x20, 0x20,
 
+    // 0x20
     0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x36,
     0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x49, 0x56,
     0x45, 0x43, 0x48, 0x2d, 0x44, 0x44, 0x20, 0x20,
 
+    // 0x40
     0x20, 0x20, 0x41, 0x4b, 0x54, 0x4a, 0x52, 0x41,
     0x5a, 0x20, 0x4f, 0x53, 0x54, 0x4c, 0x28, 0x20,
     0x4f, 0x53, 0x49, 0x43, 0x53, 0x2f, 0x4e, 0x49,
     0x55, 0x47, 0x41, 0x4c, 0x29, 0x52, 0x01, 0x00,
 
+    // 0x60
     0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x01, 0x00, 0x00, 0x01, 0x04, 0x00,
     0x10, 0x00, 0x00, 0x40, 0x00, 0x00, 0x01, 0x01,
+    // 0x78 (120)
     0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
@@ -1277,7 +1282,12 @@ void ata_image_attach(ata_drive_t *drv, char *filename, ata_drive_type_t type, a
             drv->geometry.heads = identify[6];
             drv->geometry.sectors = identify[12];
             drv->geometry.size = drv->geometry.cylinders * drv->geometry.heads * drv->geometry.sectors;
-            if ((identify[99] & 0x02) && (identify[120] || identify[121] || identify[122] || identify[123])) {
+            if ((identify[99] & 0x02) &&
+                /* 0x78 (120): 0x00, 0x40, 0x00, 0x00 */
+                ((identify[120] != /* DISABLES CODE */ (0) ) ||
+                 (identify[121] != 0) ||
+                 (identify[122] != 0) ||
+                 (identify[123] != 0))) {
                 drv->geometry.size = identify[120];
                 drv->geometry.size |= identify[121] << 8;
                 drv->geometry.size |= identify[122] << 16;
@@ -1358,6 +1368,44 @@ int ata_register_dump(ata_drive_t *drv)
  * checksumming the image (this might be slow!) and comparing it to the stored
  * checksum to check if there was any modification meanwhile.
  */
+
+/* ATA 0.7 snapshot module format:
+
+   type   | name                    | description
+   ----------------------------------------------
+   STRING | filename                |
+   DWORD  | type                    |
+   WORD   | geometry.cylinders      |
+   BYTE   | geometry.heads          |
+   BYTE   | geometry.sectors        |
+   DWORD  | geometry.size           |
+   BYTE   | error                   |
+   BYTE   | features                |
+   BYTE   | sector_count            |
+   BYTE   | sector_count_internal   |
+   BYTE   | sector                  |
+   WORD   | cylinder                |
+   BYTE   | head,dev<<4,lba<<6,legacy   |
+   BYTE   | control                 |
+   BYTE   | cmd                     |
+   BYTE   | power                   |
+   ARRAY  | packet                  | sizeof(packet)
+   WORD   | bufp                    |
+   ARRAY  | buffer                  | sector_size
+   WORD   | cylinders               |
+   BYTE   | heads                   |
+   BYTE   | sectors                 |
+   DWORD  | pos                     |
+   DWORD  | pos / sector_size       |
+   BYTE   | wcache                  |
+   BYTE   | lookahead               |
+   BYTE   | busy                    |
+   CLOCK  | spindle_clk             |
+   CLOCK  | head_clk                |
+   CLOCK  | standby_clk             |
+   DWORD  | standby                 |
+   DWORD  | standby_max             |
+*/
 
 #define CART_DUMP_VER_MAJOR   0
 #define CART_DUMP_VER_MINOR   7

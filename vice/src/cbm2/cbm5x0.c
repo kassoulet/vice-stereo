@@ -308,6 +308,10 @@ static int init_joyport_ports(void)
    the machine itself with `machine_init()'.  */
 int machine_resources_init(void)
 {
+    if (parallel_resources_init() < 0) {
+        init_resource_fail("parallel");
+        return -1;
+    }
     if (traps_resources_init() < 0) {
         init_resource_fail("traps");
         return -1;
@@ -451,6 +455,10 @@ void machine_resources_shutdown(void)
 /* CBM-II-specific command-line option initialization.  */
 int machine_cmdline_options_init(void)
 {
+    if (parallel_cmdline_options_init() < 0) {
+        init_cmdline_options_fail("parallel");
+        return -1;
+    }
     if (traps_cmdline_options_init() < 0) {
         init_cmdline_options_fail("traps");
         return -1;
@@ -584,17 +592,21 @@ static void c500_powerline_clk_alarm_handler(CLOCK offset, void *data)
     SIGNAL_VERT_BLANK_ON
 }
 
+/* ---------------------------------------------------------------------*/
+
 /*
  * C500 extra data (state of 50Hz clk)
  */
+
+/* C500DATA snapshot module format:
+
+   type  | name       | description
+   --------------------------------
+   DWORD  | IRQCLK    | CPU clock ticks until next 50 Hz IRQ
+*/
+
 #define C500DATA_DUMP_VER_MAJOR   0
 #define C500DATA_DUMP_VER_MINOR   0
-
-/*
- * DWORD        IRQCLK          CPU clock ticks until next 50 Hz IRQ
- *
- */
-
 static const char module_name[] = "C500DATA";
 
 int cbm2_c500_snapshot_write_module(snapshot_t *p)
@@ -838,6 +850,7 @@ void machine_specific_powerup(void)
 {
     tapeport_powerup();
     joyport_powerup();
+    mem_powerup();
 }
 
 void machine_specific_shutdown(void)
@@ -852,6 +865,8 @@ void machine_specific_shutdown(void)
 #ifdef HAVE_MOUSE
     mouse_shutdown();
 #endif
+
+    sid_cmdline_options_shutdown();
 
     /* close the video chip(s) */
     vicii_shutdown();

@@ -104,9 +104,11 @@
 #include "ltkernal.h"
 #include "mach5.h"
 #include "magicdesk.h"
+#include "magicdesk16.h"
 #include "magicformel.h"
 #include "magicvoice.h"
 #include "maxbasic.h"
+#include "megabyter.h"
 #include "mikroass.h"
 #include "mmc64.h"
 #include "mmcreplay.h"
@@ -115,6 +117,7 @@
 #include "pagefox.h"
 #include "partner64.h"
 #include "prophet64.h"
+#include "profidos.h"
 #include "ramlink.h"
 #include "retroreplay.h"
 #include "rexep256.h"
@@ -142,10 +145,10 @@
 #include "zippcode48.h"
 #undef CARTRIDGE_INCLUDE_PRIVATE_API
 
-/* #define DEBUGCART */
+#define DEBUGCART
 
 #ifdef DEBUGCART
-#define DBG(x)  printf x; fflush(stdout);
+#define DBG(x)  log_printf x
 #else
 #define DBG(x)
 #endif
@@ -292,6 +295,7 @@ static cartridge_info_t cartlist[] = {
     { CARTRIDGE_NAME_MAGIC_FORMEL,        CARTRIDGE_MAGIC_FORMEL,        CARTRIDGE_GROUP_FREEZER },
     { CARTRIDGE_NAME_MAGIC_VOICE,         CARTRIDGE_MAGIC_VOICE,         CARTRIDGE_GROUP_UTIL },
     { CARTRIDGE_NAME_MAX_BASIC,           CARTRIDGE_MAX_BASIC,           CARTRIDGE_GROUP_UTIL },
+    { CARTRIDGE_NAME_MEGABYTER,           CARTRIDGE_MEGABYTER,           CARTRIDGE_GROUP_GAME },
     { CARTRIDGE_NAME_MIKRO_ASSEMBLER,     CARTRIDGE_MIKRO_ASSEMBLER,     CARTRIDGE_GROUP_UTIL },
     { CARTRIDGE_NAME_MMC64,               CARTRIDGE_MMC64,               CARTRIDGE_GROUP_UTIL },
     { CARTRIDGE_NAME_MMC_REPLAY,          CARTRIDGE_MMC_REPLAY,          CARTRIDGE_GROUP_FREEZER },
@@ -300,6 +304,7 @@ static cartridge_info_t cartlist[] = {
     { CARTRIDGE_NAME_P64,                 CARTRIDGE_P64,                 CARTRIDGE_GROUP_UTIL },
     { CARTRIDGE_NAME_PAGEFOX,             CARTRIDGE_PAGEFOX,             CARTRIDGE_GROUP_UTIL },
     { CARTRIDGE_NAME_PARTNER64,           CARTRIDGE_PARTNER64,           CARTRIDGE_GROUP_UTIL },
+    { CARTRIDGE_NAME_PROFIDOS,            CARTRIDGE_PROFIDOS,            CARTRIDGE_GROUP_UTIL },
     { CARTRIDGE_NAME_RAMLINK,             CARTRIDGE_RAMLINK,             CARTRIDGE_GROUP_UTIL },
     { CARTRIDGE_NAME_RETRO_REPLAY,        CARTRIDGE_RETRO_REPLAY,        CARTRIDGE_GROUP_FREEZER },
     { CARTRIDGE_NAME_REX,                 CARTRIDGE_REX,                 CARTRIDGE_GROUP_UTIL },
@@ -347,11 +352,14 @@ cartridge_info_t *cartridge_get_info_list(void)
     return &cartlist[0];
 }
 
-/* FIXME: this only works in slot 0 right now */
+/* FIXME: slot arg is ignored right now.
+   this should return a valid cartridge ID for a given slot, or CARTRIDGE_NONE
+   FIXME: should we return CARTRIDGE_CRT(0) or not?
+*/
 int cartridge_get_id(int slot)
 {
     int type = cart_getid_slotmain();
-    /*DBG(("cartridge_get_id(slot:%d): type:%d\n", slot, type));*/
+    /* DBG(("cartridge_get_id(slot:%d): type:%d", slot, type)); */
     return type;
 }
 
@@ -360,7 +368,7 @@ int cartridge_get_id(int slot)
 */
 char *cartridge_get_filename_by_slot(int slot)
 {
-    DBG(("cartridge_get_filename_by_slot(slot:%d)\n", slot));
+    DBG(("cartridge_get_filename_by_slot(slot:%d)", slot));
 /*    return cart_get_filename_by_type(mem_cartridge_type); */
     int type = cart_getid_slotmain();
     if (cart_getid_slotmain() == type) {
@@ -407,7 +415,7 @@ static int try_cartridge_attach(int type, const char *filename)
                 return cartridge_attach_image(type, filename);
             }
         } else {
-            DBG(("cartridge_file does not exist: '%s'\n", filename));
+            DBG(("cartridge_file does not exist: '%s'", filename));
         }
     }
 
@@ -416,7 +424,7 @@ static int try_cartridge_attach(int type, const char *filename)
 
 static int set_cartridge_type(int val, void *param)
 {
-    DBG(("set_cartridge_type: %d\n", val));
+    DBG(("set_cartridge_type: %d", val));
     switch (val) {
         case CARTRIDGE_ULTIMAX:
         case CARTRIDGE_GENERIC_8KB:
@@ -469,6 +477,7 @@ static int set_cartridge_type(int val, void *param)
         case CARTRIDGE_KCS_POWER:
         case CARTRIDGE_MACH5:
         case CARTRIDGE_MAGIC_DESK:
+        case CARTRIDGE_MAGIC_DESK_16:
         case CARTRIDGE_MAGIC_FORMEL:
         case CARTRIDGE_MAGIC_VOICE:
         case CARTRIDGE_MAX_BASIC:
@@ -480,6 +489,7 @@ static int set_cartridge_type(int val, void *param)
         case CARTRIDGE_P64:
         case CARTRIDGE_PAGEFOX:
         case CARTRIDGE_PARTNER64:
+        case CARTRIDGE_PROFIDOS:
         case CARTRIDGE_RAMLINK:
         case CARTRIDGE_RETRO_REPLAY:
         case CARTRIDGE_REX:
@@ -521,7 +531,7 @@ static int set_cartridge_type(int val, void *param)
     }
 
     if (cartridge_type != val) {
-        DBG(("cartridge_type changed: %d\n", val));
+        DBG(("cartridge_type changed: %d", val));
         cartridge_type = val;
         return try_cartridge_attach(cartridge_type, cartridge_file);
     }
@@ -533,7 +543,7 @@ static int set_cartridge_type(int val, void *param)
 */
 static int set_cartridge_file(const char *name, void *param)
 {
-/*    DBG(("cartridge_file: '%s'\n", name)); */
+/*    DBG(("cartridge_file: '%s'", name)); */
     if (cartridge_file == NULL) {
         util_string_set(&cartridge_file, ""); /* resource value modified */
     }
@@ -547,13 +557,13 @@ static int set_cartridge_file(const char *name, void *param)
         return 0;
     }
 
-    DBG(("cartridge_file changed: '%s'\n", name));
+    DBG(("cartridge_file changed: '%s'", name));
 
     if (util_file_exists(name)) {
         util_string_set(&cartridge_file, name); /* resource value modified */
         return try_cartridge_attach(cartridge_type, cartridge_file);
     } else {
-        DBG(("cartridge_file does not exist: '%s'\n", name));
+        DBG(("cartridge_file does not exist: '%s'", name));
         cartridge_type = CARTRIDGE_NONE; /* resource value modified */
         util_string_set(&cartridge_file, ""); /* resource value modified */
     }
@@ -563,11 +573,11 @@ static int set_cartridge_file(const char *name, void *param)
 
 static int set_cartridge_reset(int value, void *param)
 {
-/*    DBG(("c64cartridge_reset: %d\n", val)); */
+/*    DBG(("c64cartridge_reset: %d", val)); */
     int val = value ? 1 : 0;
 
     if (c64cartridge_reset != val) {
-        DBG(("c64cartridge_reset changed: %d\n", val));
+        DBG(("c64cartridge_reset changed: %d", val));
         c64cartridge_reset = val; /* resource value modified */
     }
     return 0;
@@ -667,13 +677,13 @@ int cartridge_cmdline_options_init(void)
 int cart_getid_slotmain(void)
 {
 #if 0
-    DBG(("CART: cart_getid_slotmain c64cart_type: %d crttype: %d\n", c64cart_type, crttype));
+    DBG(("CART: cart_getid_slotmain c64cart_type: %d crttype: %d", c64cart_type, crttype));
     if (c64cart_type == CARTRIDGE_CRT) {
         return crttype;
     }
     return c64cart_type;
 #else
-    /* DBG(("CART: cart_getid_slotmain mem_cartridge_type: %d \n", mem_cartridge_type)); */
+    /* DBG(("CART: cart_getid_slotmain mem_cartridge_type: %d ", mem_cartridge_type)); */
     return mem_cartridge_type;
 #endif
 }
@@ -716,7 +726,7 @@ static int crt_attach(const char *filename, uint8_t *rawcart)
     int rc = -1, new_crttype;
     FILE *fd;
 
-    DBG(("crt_attach: %s\n", filename));
+    DBG(("crt_attach: %s", filename));
 
     fd = crt_open(filename, &header);
     if (fd == NULL) {
@@ -735,7 +745,7 @@ static int crt_attach(const char *filename, uint8_t *rawcart)
     if (new_crttype & 0x8000) {
         new_crttype -= 0x10000;
     }
-    DBG(("crt_attach ID: %d\n", new_crttype));
+    DBG(("crt_attach ID: %d", new_crttype));
 
 /*  cart should always be detached. there is no reason for doing fancy checks
     here, and it will cause problems incase a cart MUST be detached before
@@ -750,7 +760,7 @@ static int crt_attach(const char *filename, uint8_t *rawcart)
        name is usually kept in a resource, and the cartridge is enabled via another
        resource - the function called from here must also do this */
     if ((machine_class == VICE_MACHINE_C128) && (header.machine == VICE_MACHINE_C128)) {
-        DBG(("attaching as C128 cartridge id: %d\n", new_crttype));
+        DBG(("attaching as C128 cartridge id: %d", new_crttype));
         rc = c128cartridge->attach_crt(new_crttype, fd, filename, rawcart);
     } else {
 
@@ -798,7 +808,7 @@ static int crt_attach(const char *filename, uint8_t *rawcart)
                 rc = capture_crt_attach(fd, rawcart);
                 break;
             case CARTRIDGE_COMAL80:
-                rc = comal80_crt_attach(fd, rawcart);
+                rc = comal80_crt_attach(fd, rawcart, header.subtype);
                 break;
             case CARTRIDGE_DELA_EP256:
                 rc = delaep256_crt_attach(fd, rawcart);
@@ -904,6 +914,9 @@ static int crt_attach(const char *filename, uint8_t *rawcart)
             case CARTRIDGE_MAGIC_DESK:
                 rc = magicdesk_crt_attach(fd, rawcart);
                 break;
+            case CARTRIDGE_MAGIC_DESK_16:
+                rc = magicdesk16_crt_attach(fd, rawcart);
+                break;
             case CARTRIDGE_MAGIC_FORMEL:
                 rc = magicformel_crt_attach(fd, rawcart);
                 break;
@@ -912,6 +925,9 @@ static int crt_attach(const char *filename, uint8_t *rawcart)
                 break;
             case CARTRIDGE_MAX_BASIC:
                 rc = maxbasic_crt_attach(fd, rawcart);
+                break;
+            case CARTRIDGE_MEGABYTER:
+                rc = megabyter_crt_attach(fd, rawcart, filename);
                 break;
             case CARTRIDGE_MIKRO_ASSEMBLER:
                 rc = mikroass_crt_attach(fd, rawcart);
@@ -936,6 +952,9 @@ static int crt_attach(const char *filename, uint8_t *rawcart)
                 break;
             case CARTRIDGE_PARTNER64:
                 rc = partner64_crt_attach(fd, rawcart);
+                break;
+            case CARTRIDGE_PROFIDOS:
+                rc = profidos_crt_attach(fd, rawcart);
                 break;
             case CARTRIDGE_UC1:
                 rc = uc1_crt_attach(fd, rawcart);
@@ -1023,7 +1042,7 @@ static int crt_attach(const char *filename, uint8_t *rawcart)
                 rc = zippcode48_crt_attach(fd, rawcart);
                 break;
             default:
-                archdep_startup_log_error("unknown CRT ID: %d\n", new_crttype);
+                archdep_startup_log_error("unknown CRT ID: %d", new_crttype);
                 rc = -1;
                 break;
         }
@@ -1032,10 +1051,10 @@ static int crt_attach(const char *filename, uint8_t *rawcart)
     fclose(fd);
 
     if (rc == -1) {
-        DBG(("crt_attach error (%d)\n", rc));
+        DBG(("crt_attach error (%d)", rc));
         return -1;
     }
-    DBG(("crt_attach return ID: %d\n", new_crttype));
+    DBG(("crt_attach return ID: %d", new_crttype));
     return new_crttype;
 }
 
@@ -1081,7 +1100,7 @@ int cartridge_attach_image(int type, const char *filename)
     } else {
         carttype = type;
     }
-    DBG(("CART: cartridge_attach_image type: %d ID: %d\n", type, carttype));
+    DBG(("CART: cartridge_attach_image type: %d ID: %d", type, carttype));
 
     /* allocate temporary array */
     rawcart = lib_malloc(C64CART_IMAGE_LIMIT);
@@ -1099,58 +1118,58 @@ int cartridge_attach_image(int type, const char *filename)
            cart currently is in the "Main Slot" */
         oldmain = cart_getid_slotmain();
         if (oldmain != CARTRIDGE_NONE) {
-            DBG(("CART: detach slot main ID: %d\n", oldmain));
+            DBG(("CART: detach slot main ID: %d", oldmain));
             cartridge_detach_image(oldmain);
         }
     }
     if (oldmain != carttype) {
-        DBG(("CART: detach %s ID: %d\n", slotmain ? "slot main" : "other slot", carttype));
+        DBG(("CART: detach %s ID: %d", slotmain ? "slot main" : "other slot", carttype));
         cartridge_detach_image(carttype);
     }
 
     if (type == CARTRIDGE_CRT) {
-        DBG(("CART: attach CRT ID: %d '%s'\n", carttype, filename));
+        DBG(("CART: attach CRT ID: %d '%s'", carttype, filename));
         cartid = crt_attach(abs_filename, rawcart);
         if (cartid == CARTRIDGE_NONE) {
             goto exiterror;
         }
         if (type < 0) {
-            DBG(("CART: attach generic CRT ID: %d\n", type));
+            DBG(("CART: attach generic CRT ID: %d", type));
         }
     } else {
-        DBG(("CART: attach BIN ID: %d '%s'\n", carttype, filename));
+        DBG(("CART: attach BIN ID: %d '%s'", carttype, filename));
         cartid = carttype;
         /* if this is x128 and the ID is a C128-only cart, use c128 specific function */
-        DBG(("cartid: %d c128?:%d c128id:%d\n", cartid, (machine_class == VICE_MACHINE_C128), (CARTRIDGE_C128_ISID(cartid)) ));
+        DBG(("cartid: %d c128?:%d c128id:%d", cartid, (machine_class == VICE_MACHINE_C128), (CARTRIDGE_C128_ISID(cartid)) ));
         if ((machine_class == VICE_MACHINE_C128) && (CARTRIDGE_C128_ISID(cartid))) {
-            DBG(("trying C128 exclusive function\n"));
+            DBG(("trying C128 exclusive function"));
             if (c128cartridge->bin_attach(carttype, abs_filename, rawcart) < 0) {
-                DBG(("C128 exclusive function FAILED\n"));
+                DBG(("C128 exclusive function FAILED"));
                 goto exiterror;
             }
-            DBG(("C128 exclusive function OK\n"));
+            DBG(("C128 exclusive function OK"));
         } else if (cart_bin_attach(carttype, abs_filename, rawcart) < 0) {
             goto exiterror;
         }
     }
 
     if (cart_is_slotmain(cartid)) {
-        DBG(("cartridge_attach MAIN ID: %d\n", cartid));
+        DBG(("cartridge_attach MAIN ID: %d", cartid));
         mem_cartridge_type = cartid;
         cart_romhbank_set_slotmain(0);
         cart_romlbank_set_slotmain(0);
     } else {
-        DBG(("cartridge_attach (other) ID: %d\n", cartid));
+        DBG(("cartridge_attach (other) ID: %d", cartid));
     }
 
-    DBG(("CART: attach RAW ID: %d\n", cartid));
+    DBG(("CART: attach RAW ID: %d", cartid));
     cart_attach(cartid, rawcart);
 
     cart_power_off();
 
     if (cart_is_slotmain(cartid)) {
         /* "Main Slot" */
-        DBG(("CART: set main slot ID: %d type: %d\n", carttype, type));
+        DBG(("CART: set main slot ID: %d type: %d", carttype, type));
         c64cart_type = type;
         if (type == CARTRIDGE_CRT) {
             crttype = carttype;
@@ -1158,17 +1177,23 @@ int cartridge_attach_image(int type, const char *filename)
         util_string_set(&cartfile, abs_filename);
     }
 
-    DBG(("CART: cartridge_attach_image type: %d ID: %d done.\n", type, carttype));
+    DBG(("CART: cartridge_attach_image type: %d ID: %d done.", type, carttype));
     lib_free(rawcart);
     log_message(LOG_DEFAULT, "CART: attached '%s' as ID %d.", abs_filename, carttype);
     lib_free(abs_filename);
     return 0;
 
 exiterror:
-    DBG(("CART: error\n"));
+    DBG(("CART: error"));
     lib_free(rawcart);
     log_message(LOG_DEFAULT, "CART: could not attach '%s'.", abs_filename);
     lib_free(abs_filename);
+    return -1;
+}
+
+/* FIXME: add additional image to standard cartridge */
+int cartridge_attach_add_image(int type, const char *filename)
+{
     return -1;
 }
 
@@ -1200,11 +1225,11 @@ void cart_attach_from_snapshot(int type)
 void cart_detach_slotmain(void)
 {
     int type = cart_getid_slotmain();
-    DBG(("CART: detach main %d: type: %d id: %d\n", type, c64cart_type, crttype));
+    DBG(("CART: detach main %d: type: %d id: %d", type, c64cart_type, crttype));
     if (type != CARTRIDGE_NONE) {
         cart_detach(type);
 
-        DBG(("CART: unset cart config\n"));
+        DBG(("CART: unset cart config"));
         cart_config_changed_slotmain(CMODE_RAM, CMODE_RAM, CMODE_READ);
 
         cart_power_off();
@@ -1232,12 +1257,12 @@ void cart_detach_slotmain(void)
 void cartridge_detach_image(int type)
 {
     if (type == 0) {
-        DBG(("CART: detach MAIN ID: %d\n", type));
+        DBG(("CART: detach MAIN ID: %d", type));
         cart_detach_slotmain();
     } else if (type == -1) {
         cart_detach_all();
     } else {
-        DBG(("CART: detach ID: %d\n", type));
+        DBG(("CART: detach ID: %d", type));
         /* detach only given type */
         if (cart_is_slotmain(type)) {
             cart_detach_slotmain();
@@ -1251,7 +1276,7 @@ void cartridge_detach_image(int type)
     }
 
     /* FIXME: cart_detach should take care of it */
-    DBG(("CART: unset cart config\n"));
+    DBG(("CART: unset cart config"));
     cart_config_changed_slotmain(CMODE_RAM, CMODE_RAM, CMODE_READ);
 
     cart_power_off();
@@ -1272,12 +1297,12 @@ void cartridge_set_default(void)
                 type = c64cart_type;
             }
         } else {
-            DBG(("cartridge_set_default: file does not exist: '%s'\n", cartfile));
+            DBG(("cartridge_set_default: file does not exist: '%s'", cartfile));
         }
     } else {
-        DBG(("cartridge_set_default: no filename\n"));
+        DBG(("cartridge_set_default: no filename"));
     }
-    DBG(("cartridge_set_default: id %d '%s'\n", type, cartfile));
+    DBG(("cartridge_set_default: id %d '%s'", type, cartfile));
 
     if (type == CARTRIDGE_NONE) {
         util_string_set(&cartridge_file, ""); /* resource value modified */
@@ -1299,8 +1324,8 @@ void cartridge_unset_default(void)
 
 int cartridge_save_image(int type, const char *filename)
 {
-    char *ext = util_get_extension(filename);
-    if (ext != NULL && !strcmp(ext, "crt")) {
+    const char *ext = util_get_extension(filename);
+    if ((ext != NULL) && !strcmp(ext, "crt")) {
         return cartridge_crt_save(type, filename);
     }
     return cartridge_bin_save(type, filename);
@@ -1337,12 +1362,12 @@ static void cart_nmi_alarm_triggered(CLOCK offset, void *data)
 /* called by the Freeze Button alarm */
 static void cart_freeze_alarm_triggered(CLOCK offset, void *data)
 {
-    DBG(("cart_freeze_alarm_triggered\n"));
+    DBG(("cart_freeze_alarm_triggered"));
     alarm_unset(cartridge_freeze_alarm);
     cart_freeze_alarm_time = CLOCK_MAX;
 
     if (cart_freeze_allowed()) {  /* c64carthooks.c */
-        DBG(("cart_trigger_freeze delay 3 cycles\n"));
+        DBG(("cart_trigger_freeze delay 3 cycles"));
         maincpu_set_nmi(cartridge_int_num, IK_NMI);
         cart_nmi_alarm_time = maincpu_clk + 3;
         alarm_set(cartridge_nmi_alarm, cart_nmi_alarm_time);
@@ -1369,7 +1394,7 @@ void cartridge_trigger_freeze(void)
 
     cart_freeze_alarm_time = maincpu_clk + delay;
     alarm_set(cartridge_freeze_alarm, cart_freeze_alarm_time);
-    DBG(("cartridge_trigger_freeze delay %d cycles\n", delay));
+    DBG(("cartridge_trigger_freeze delay %d cycles", delay));
 }
 
 void cart_unset_alarms(void)

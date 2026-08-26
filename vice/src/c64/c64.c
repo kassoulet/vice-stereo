@@ -144,6 +144,7 @@
 #include "userport_synergy_joystick.h"
 #include "userport_wic64.h"
 #include "userport_woj_joystick.h"
+#include "userport_funmp3.h"
 #include "vice-event.h"
 #include "vicii.h"
 #include "vicii-mem.h"
@@ -157,6 +158,16 @@
 #include "lightpen.h"
 #include "mouse.h"
 #endif
+
+
+/* #define DEBUG_C64 */
+
+#ifdef DEBUG_C64
+#define DBG(x) log_printf  x
+#else
+#define DBG(x)
+#endif
+
 
 /** \brief  Delay in seconds before pasting -keybuf argument into the buffer
  */
@@ -240,6 +251,11 @@ static log_t c64_log = LOG_DEFAULT;
 static machine_timing_t machine_timing;
 
 /* ------------------------------------------------------------------------ */
+
+static int cia1_dump(void)
+{
+    return ciacore_dump(machine_context.cia1);
+}
 
 static int cia2_dump(void)
 {
@@ -411,6 +427,24 @@ static io_source_t sid_d700_device = {
     IO_MIRROR_OTHER            /* this is a mirror of another registered device */
 };
 
+/* MAX Machine CIA1 mirror */
+static io_source_t cia1_dd00_device = {
+    "CIA1",                /* name of the chip */
+    IO_DETACH_NEVER,       /* chip is never involved in collisions, so no detach */
+    IO_DETACH_NO_RESOURCE, /* does not use a resource for detach */
+    0xdd00, 0xddff, 0x0f,  /* main registers */
+    1,                     /* read is always valid */
+    cia1_store,            /* store function */
+    NULL,                  /* NO poke function */
+    cia1_read,             /* read function */
+    cia1_peek,             /* peek function */
+    cia1_dump,             /* chip state information dump function */
+    IO_CART_ID_NONE,       /* not a cartridge */
+    IO_PRIO_HIGH,          /* high priority, chip never involved in collisions */
+    0,                     /* insertion order, gets filled in by the registration function */
+    IO_MIRROR_OTHER        /* this is a mirror of another registered device */
+};
+
 static io_source_t cia2_dd00_device = {
     "CIA2",                /* name of the chip */
     IO_DETACH_NEVER,       /* chip is never involved in collisions, so no detach */
@@ -428,6 +462,42 @@ static io_source_t cia2_dd00_device = {
     IO_MIRROR_NONE         /* this is not a mirror */
 };
 
+/* MAX Machine CIA1 mirror */
+static io_source_t cia1_de00_device = {
+    "CIA1",                /* name of the chip */
+    IO_DETACH_NEVER,       /* chip is never involved in collisions, so no detach */
+    IO_DETACH_NO_RESOURCE, /* does not use a resource for detach */
+    0xde00, 0xdeff, 0x0f,  /* main registers */
+    1,                     /* read is always valid */
+    cia1_store,            /* store function */
+    NULL,                  /* NO poke function */
+    cia1_read,             /* read function */
+    cia1_peek,             /* peek function */
+    cia1_dump,             /* chip state information dump function */
+    IO_CART_ID_NONE,       /* not a cartridge */
+    IO_PRIO_HIGH,          /* high priority, chip never involved in collisions */
+    0,                     /* insertion order, gets filled in by the registration function */
+    IO_MIRROR_OTHER        /* this is a mirror of another registered device */
+};
+
+/* MAX Machine CIA1 mirror */
+static io_source_t cia1_df00_device = {
+    "CIA1",                /* name of the chip */
+    IO_DETACH_NEVER,       /* chip is never involved in collisions, so no detach */
+    IO_DETACH_NO_RESOURCE, /* does not use a resource for detach */
+    0xdf00, 0xdfff, 0x0f,  /* main registers */
+    1,                     /* read is always valid */
+    cia1_store,            /* store function */
+    NULL,                  /* NO poke function */
+    cia1_read,             /* read function */
+    cia1_peek,             /* peek function */
+    cia1_dump,             /* chip state information dump function */
+    IO_CART_ID_NONE,       /* not a cartridge */
+    IO_PRIO_HIGH,          /* high priority, chip never involved in collisions */
+    0,                     /* insertion order, gets filled in by the registration function */
+    IO_MIRROR_OTHER        /* this is a mirror of another registered device */
+};
+
 static io_source_list_t *vicii_d000_list_item = NULL;
 static io_source_list_t *vicii_d100_list_item = NULL;
 static io_source_list_t *vicii_d200_list_item = NULL;
@@ -438,9 +508,12 @@ static io_source_list_t *sid_d500_list_item = NULL;
 static io_source_list_t *sid_d600_list_item = NULL;
 static io_source_list_t *sid_d700_list_item = NULL;
 static io_source_list_t *cia2_dd00_list_item = NULL;
+static io_source_list_t *cia1_de00_list_item = NULL;
+static io_source_list_t *cia1_df00_list_item = NULL;
 
 static int c64_cia2_active = 1;
 
+/* used to remove CIA2 from memory map in the model switching code */
 void c64_cia2_enable(int val)
 {
     if (c64_cia2_active != val) {
@@ -448,8 +521,23 @@ void c64_cia2_enable(int val)
             io_source_unregister(cia2_dd00_list_item);
             cia2_dd00_list_item = NULL;
         }
+        if (cia1_de00_list_item != NULL) {
+            io_source_unregister(cia1_de00_list_item);
+            cia1_de00_list_item = NULL;
+        }
+        if (cia1_df00_list_item != NULL) {
+            io_source_unregister(cia1_df00_list_item);
+            cia1_df00_list_item = NULL;
+        }
         if (val) {
             cia2_dd00_list_item = io_source_register(&cia2_dd00_device);
+        } else {
+            /* CIA 1 mirrors(MAX Machine) */
+            /* Note: this assumes the CIA-loopback pin on the MAX Cartridge is
+               closed (which is the case for all known cartridges) */
+            cia2_dd00_list_item = io_source_register(&cia1_dd00_device);
+            cia1_de00_list_item = io_source_register(&cia1_de00_device);
+            cia1_df00_list_item = io_source_register(&cia1_df00_device);
         }
     }
 
@@ -1016,7 +1104,11 @@ void machine_setup_context(void)
 /* C64-specific initialization.  */
 int machine_specific_init(void)
 {
-    c64_log = log_open("C64");
+    if (c64_log == LOG_DEFAULT) {
+        c64_log = log_open("C64");
+    }
+
+    DBG(("machine_specific_init"));
 
     if (mem_load() < 0) {
         return -1;
@@ -1054,7 +1146,7 @@ int machine_specific_init(void)
     disk_image_init();
 
     /* Initialize autostart.  */
-    autostart_init(3, 1);
+    autostart_init(3);
 
     /* Pre-init C64-specific parts of the menus before vicii_init()
        creates a canvas window with a menubar at the top. */
@@ -1091,9 +1183,12 @@ int machine_specific_init(void)
     userport_dac_sound_chip_init();
     userport_digimax_sound_chip_init();
 
-    /* Initialize mp3@64 */
+    /* Initialize mp3@64, funmp3 */
 #ifdef USE_MPG123
     clockport_mp3at64_sound_chip_init();
+#endif
+#if defined(USE_MPG123) && defined (HAVE_GLOB_H)
+    userport_funmp3_sound_chip_init();
 #endif
 
     drive_sound_init();
@@ -1152,6 +1247,8 @@ int machine_specific_init(void)
     cartridge_init();
 
     machine_drive_stub();
+
+    DBG(("machine_specific_init (done)"));
 
     return 0;
 }
@@ -1471,8 +1568,10 @@ const char *machine_get_name(void)
 
 /* ------------------------------------------------------------------------- */
 
+/* called via userport.c:set_userport_flag->userport_props.set_flag(val); */
 static void c64_userport_set_flag(uint8_t b)
 {
+    DBG(("c64_userport_set_flag(%d)", b));
     if (b != 0) {
         ciacore_set_flag(machine_context.cia2);
     }

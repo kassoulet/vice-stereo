@@ -36,6 +36,12 @@
 
 #ifdef HAVE_MIDI
 
+#if 0
+/* force OSS for testing */
+#undef USE_ALSA
+#define USE_OSS
+#endif
+
 #if !defined (USE_OSS) && !defined (USE_ALSA)
 #error "MIDI driver needs either OSS or ALSA"
 #endif
@@ -444,12 +450,12 @@ static void mididrv_alsa_shutdown(void)
     if (mididrv_log == LOG_DEFAULT) {
         mididrv_log = log_open("ALSA MIDI");
     }
-#if 0
+
 #ifdef DEBUG_MIDI
-    log_message(mididrv_log, "alsa_shutdown");
+    log_message(mididrv_log, "mididrv_alsa_shutdown seq:%p midi_event_parser:%p", seq, midi_event_parser);
 #endif
-#endif
-    log_message(mididrv_log, "closed ALSA MIDI sequencer port '%s'", midi_name);
+
+    log_verbose(mididrv_log, "closed ALSA MIDI sequencer port '%s'", midi_name);
 
     if (fd_in >= 0) {
         mididrv_alsa_in_close();
@@ -479,7 +485,7 @@ static void mididrv_alsa_init(void)
     }
 
 #ifdef DEBUG_MIDI
-    log_message(mididrv_log, "alsa_init");
+    log_message(mididrv_log, "alsa_init seq:%p midi_event_parser:%p '%s'", seq, midi_event_parser, midi_name);
 #endif
 
     /* if we have already been initialized, just return */
@@ -509,7 +515,7 @@ static void mididrv_alsa_init(void)
         log_error(mididrv_log, "could not create ALSA sequencer port");
         return;
     }
-    log_message(mididrv_log, "opened ALSA MIDI sequencer port '%s'", midi_name);
+    log_verbose(mididrv_log, "opened ALSA MIDI sequencer port '%s'", midi_name);
 
     /* create event parser */
     if ((alsa_err = snd_midi_event_new(RINGBUFFER_SIZE, &midi_event_parser)) < 0) {
