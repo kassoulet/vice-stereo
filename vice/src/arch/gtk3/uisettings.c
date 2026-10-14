@@ -64,6 +64,7 @@
 #include "lib.h"
 #include "log.h"
 #include "machine.h"
+#include "mainlock.h"
 #include "resources.h"
 #include "ui.h"
 #include "uiactions.h"
@@ -99,6 +100,7 @@
 #include "settings_gmod2.h"
 #include "settings_gmod2c128.h"
 #include "settings_gmod3.h"
+#include "settings_magicdeskplus.h"
 #include "settings_host_display.h"
 #include "settings_hotkeys.h"
 #include "settings_hvsc.h"
@@ -329,6 +331,9 @@ static ui_settings_tree_node_t c64_cartridges[] = {
     { CARTRIDGE_NAME_GMOD3,
       "gmod3",
       settings_gmod3_widget_create, NULL },
+    { CARTRIDGE_NAME_MAGIC_DESK_PLUS,
+      "magicdeskplus",
+      settings_magicdeskplus_widget_create, NULL },
     { CARTRIDGE_NAME_MEGABYTER,
       "megabyter",
       settings_megabyter_widget_create, NULL },
@@ -471,6 +476,9 @@ static ui_settings_tree_node_t scpu64_cartridges[] = {
     { CARTRIDGE_NAME_GMOD3,
       "gmod3",
       settings_gmod3_widget_create, NULL },
+    { CARTRIDGE_NAME_MAGIC_DESK_PLUS,
+      "magicdeskplus",
+      settings_magicdeskplus_widget_create, NULL },
     { CARTRIDGE_NAME_MEGABYTER,
       "megabyter",
       settings_megabyter_widget_create, NULL },
@@ -603,6 +611,9 @@ static ui_settings_tree_node_t c128_cartridges[] = {
     { CARTRIDGE_NAME_GMOD3,
       "gmod3",
       settings_gmod3_widget_create, NULL },
+    { CARTRIDGE_NAME_MAGIC_DESK_PLUS,
+      "magicdeskplus",
+      settings_magicdeskplus_widget_create, NULL },
     { CARTRIDGE_NAME_MEGABYTER,
       "megabyter",
       settings_megabyter_widget_create, NULL },
@@ -2631,6 +2642,8 @@ static void response_callback(GtkWidget *widget,
         gtk_widget_destroy(widget);
         settings_window = NULL;
 
+        /* This handler is connected unlocked so we need to get the mainlock before calling into the emulator */
+        mainlock_obtain();
         resources_get_int("PauseOnSettings", &pause_on_settings);
         if (pause_on_settings) {
             if (settings_old_pause_state) {
@@ -2639,6 +2652,7 @@ static void response_callback(GtkWidget *widget,
                 ui_pause_disable();
             }
         }
+        mainlock_release();
     }
 }
 
@@ -2887,12 +2901,14 @@ void ui_settings_dialog_show(const char *path)
 {
     int pause_on_settings = 0;
 
+    mainlock_obtain();
     settings_old_pause_state = ui_pause_active();
 
     resources_get_int("PauseOnSettings", &pause_on_settings);
     if (pause_on_settings) {
         ui_pause_enable();
     }
+    mainlock_release();
 
     /* call from ui thread without locking - creating the settings dialog is heavy */
     gdk_threads_add_timeout(0, ui_settings_dialog_show_impl, (gpointer)path);

@@ -58,6 +58,7 @@
 #include "log.h"
 #include "maincpu.h"
 #include "machine.h"
+#include "mousedrv.h"
 #ifdef HAVE_NETWORK
 #include "monitor_network.h"
 #include "monitor_binary.h"
@@ -513,6 +514,10 @@ void vsync_do_end_of_line(void)
      */
     bool can_yield_to_ui = mainlock_is_vice_thread();
 
+    /* deal with any accumulated sound immediately
+       CAUTION: do this before "early exit" below to avoid crash at shutdown (bug #2163) */
+    tick_based_sync_timing = sound_flush();
+
     /*
      * Ideally the vic chip draw alarm wouldn't be triggered
      * during shutdown but here we are - apply workaround.
@@ -526,9 +531,6 @@ void vsync_do_end_of_line(void)
 
         return;
     }
-
-    /* deal with any accumulated sound immediately */
-    tick_based_sync_timing = sound_flush();
 
     tick_now = tick_now_after(last_sync_tick);
 
@@ -614,6 +616,7 @@ void vsync_do_end_of_line(void)
 
         /* deal with pending user input */
         joystick();
+        mousedrv_poll();
 
         last_sync_tick = tick_now;
         last_sync_clk = main_cpu_clock;
